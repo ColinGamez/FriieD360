@@ -1,0 +1,46 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useEffect } from 'react';
+import { AppLayout } from './components/common/Layout';
+import { Dashboard } from './features/dashboard/Dashboard';
+import { LibraryView } from './features/library/LibraryView';
+import { Settings } from './features/settings/Settings';
+import { ExtensionRepair } from './features/repair/ExtensionRepair';
+import { StagingArea } from './features/staging/StagingArea';
+import { ActivityLog } from './features/activity/ActivityLog';
+import { CollectionsView } from './features/collections/CollectionsView';
+import { UsbExport } from './features/staging/UsbExport';
+import { useStore } from './store/useStore';
+
+export default function App() {
+  const { activeTab, setActiveTab, fetchSettings, fetchItems } = useStore();
+
+  useEffect(() => {
+    fetchSettings();
+    fetchItems();
+  }, []);
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard': return <Dashboard />;
+      case 'avatar': return <LibraryView title="Avatar Items" type="avatar_item" />;
+      case 'themes': return <LibraryView title="Themes" type="theme" />;
+      case 'collections': return <CollectionsView />;
+      case 'staging': return <StagingArea />;
+      case 'usb_export': return <UsbExport />;
+      case 'repair': return <ExtensionRepair />;
+      case 'activity': return <ActivityLog />;
+      case 'settings': return <Settings />;
+      default: return <Dashboard />;
+    }
+  };
+
+  return (
+    <AppLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+      {renderContent()}
+    </AppLayout>
+  );
+}
