@@ -79,6 +79,14 @@ export const LibraryView = ({ title, type }: LibraryViewProps) => {
           </button>
 
           <button 
+            onClick={() => fetchItems()}
+            className="p-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all text-gray-400 hover:text-white"
+            title="Sync with database"
+          >
+            <RefreshCw size={18} />
+          </button>
+
+          <button 
             onClick={triggerScan}
             disabled={isScanning}
             className="flex items-center space-x-2 px-4 py-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all disabled:opacity-50"

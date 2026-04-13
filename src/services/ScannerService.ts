@@ -21,11 +21,13 @@ export class ScannerService {
     const cache = new Map(existingItems.map(i => [i.fullPath, i]));
     const results: any[] = [];
 
+    // First pass: count all files to provide accurate progress
     for (const folder of folders) {
       if (!(await fs.pathExists(folder))) continue;
       await this.countFiles(folder);
     }
 
+    // Second pass: walk and process
     for (const folder of folders) {
       if (!(await fs.pathExists(folder))) continue;
       await this.walk(folder, cache, results);
@@ -38,11 +40,18 @@ export class ScannerService {
   private static async countFiles(dir: string) {
     try {
       const files = await fs.readdir(dir);
-      this.progress.total += files.length;
       for (const file of files) {
         const fullPath = path.join(dir, file);
-        const stat = await fs.stat(fullPath);
-        if (stat.isDirectory()) await this.countFiles(fullPath);
+        try {
+          const stat = await fs.lstat(fullPath); // Use lstat to avoid following broken symlinks
+          if (stat.isDirectory()) {
+            await this.countFiles(fullPath);
+          } else {
+            this.progress.total++;
+          }
+        } catch (e) {
+          // Skip files we can't stat
+        }
       }
     } catch (err) {
       console.error(`Failed to count files in ${dir}`, err);
@@ -55,46 +64,55 @@ export class ScannerService {
       const files = await fs.readdir(dir);
 
       for (const file of files) {
-        this.progress.current++;
         const fullPath = path.join(dir, file);
-        const stat = await fs.stat(fullPath);
+        try {
+          const stat = await fs.lstat(fullPath);
 
-        if (stat.isDirectory()) {
-          await this.walk(fullPath, cache, results);
-        } else {
-          const cached = cache.get(fullPath);
-          
-          if (cached && cached.dateModified === stat.mtime.toISOString()) {
-            results.push(cached);
-            continue;
+          if (stat.isDirectory()) {
+            await this.walk(fullPath, cache, results);
+          } else {
+            this.progress.current++;
+            
+            const cached = cache.get(fullPath);
+            if (cached && cached.dateModified === stat.mtime.toISOString()) {
+              results.push(cached);
+              continue;
+            }
+
+            const isAvatar = fullPath.includes('00009000') || fullPath.toLowerCase().includes('avatar');
+            const isTheme = fullPath.includes('00030000') || fullPath.toLowerCase().includes('theme');
+            
+            if (isAvatar || isTheme) {
+              const ext = path.extname(file).toUpperCase();
+              const header = await MetadataService.verifyHeader(fullPath);
+              
+              // Only add if it has a valid Xbox header or we're explicitly looking for it
+              if (header.isValid || ext === '.CON' || ext === '') {
+                const meta = MetadataService.deriveMetadata(fullPath, file);
+
+                results.push({
+                  id: cached?.id || nanoid(),
+                  name: path.parse(file).name,
+                  fileName: file,
+                  extension: ext,
+                  fullPath,
+                  parentFolder: dir,
+                  size: stat.size,
+                  type: isAvatar ? 'avatar_item' : 'theme',
+                  isExtensionless: ext === '',
+                  isFavorite: cached?.isFavorite || false,
+                  isStaged: cached?.isStaged || false,
+                  dateModified: stat.mtime.toISOString(),
+                  isValid: header.isValid,
+                  format: header.format,
+                  metadata: meta
+                });
+              }
+            }
           }
-
-          const isAvatar = fullPath.includes('00009000') || fullPath.toLowerCase().includes('avatar');
-          const isTheme = fullPath.includes('00030000') || fullPath.toLowerCase().includes('theme');
-          
-          if (isAvatar || isTheme) {
-            const ext = path.extname(file).toUpperCase();
-            const header = await MetadataService.verifyHeader(fullPath);
-            const meta = MetadataService.deriveMetadata(fullPath, file);
-
-            results.push({
-              id: cached?.id || nanoid(),
-              name: path.parse(file).name,
-              fileName: file,
-              extension: ext,
-              fullPath,
-              parentFolder: dir,
-              size: stat.size,
-              type: isAvatar ? 'avatar_item' : 'theme',
-              isExtensionless: ext === '',
-              isFavorite: cached?.isFavorite || false,
-              isStaged: cached?.isStaged || false,
-              dateModified: stat.mtime.toISOString(),
-              isValid: header.isValid,
-              format: header.format,
-              metadata: meta
-            });
-          }
+        } catch (e) {
+          // Skip files we can't process
+          this.progress.current++;
         }
       }
     } catch (err) {

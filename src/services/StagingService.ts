@@ -17,10 +17,16 @@ export class StagingService {
 
   static async prepareOperations(items: any[], outputBase: string): Promise<StagingOp[]> {
     return items.map(item => {
-      const titleId = item.type === 'avatar_item' ? this.AVATAR_TITLE_ID : this.THEME_TITLE_ID;
       const typeId = item.type === 'avatar_item' ? this.AVATAR_TYPE_ID : this.THEME_TYPE_ID;
       
-      const relativePath = path.join('Content', '0000000000000000', titleId, typeId, item.fileName);
+      // Use the item's detected Title ID if it's valid (8 hex chars and not 'Unknown'), 
+      // otherwise fallback to the system Title IDs.
+      let titleId = item.metadata?.titleId;
+      if (!titleId || titleId === 'Unknown' || !/^[0-9A-Fa-f]{8}$/.test(titleId)) {
+        titleId = item.type === 'avatar_item' ? this.AVATAR_TITLE_ID : this.THEME_TITLE_ID;
+      }
+      
+      const relativePath = path.join('Content', '0000000000000000', titleId.toUpperCase(), typeId, item.fileName);
       const dest = path.join(outputBase, relativePath);
 
       return {

@@ -24,6 +24,7 @@ interface AppState {
   removeFromStaging: (id: string) => void;
   clearStaging: () => void;
   refreshInstalledStatus: (drivePath: string) => Promise<void>;
+  updateMetadata: (itemId: string, metadata: any) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -157,6 +158,21 @@ export const useStore = create<AppState>((set, get) => ({
       set({ installedHeuristics: data });
     } catch (err) {
       console.error('Failed to refresh installed status', err);
+    }
+  },
+
+  updateMetadata: async (itemId, metadata) => {
+    set((state) => ({
+      items: state.items.map(i => i.id === itemId ? { ...i, metadata: { ...i.metadata, ...metadata } } : i)
+    }));
+    try {
+      await fetch('/api/library/update-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId, metadata })
+      });
+    } catch (err) {
+      console.error('Failed to update metadata', err);
     }
   }
 }));

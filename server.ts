@@ -10,6 +10,8 @@ import { ExportService } from "./src/services/ExportService";
 import { InstalledContentService } from "./src/services/InstalledContentService";
 
 const DB_PATH = path.join(process.cwd(), "db.json");
+let isWriting = false;
+const writeQueue: any[] = [];
 
 async function getDb() {
   if (!(await fs.pathExists(DB_PATH))) {
@@ -23,6 +25,23 @@ async function getDb() {
     return initialDb;
   }
   return await fs.readJson(DB_PATH);
+}
+
+async function saveDb(db: any) {
+  if (isWriting) {
+    writeQueue.push(db);
+    return;
+  }
+  isWriting = true;
+  try {
+    await fs.writeJson(DB_PATH, db);
+  } finally {
+    isWriting = false;
+    if (writeQueue.length > 0) {
+      const next = writeQueue.shift();
+      await saveDb(next);
+    }
+  }
 }
 
 async function startServer() {
@@ -55,7 +74,7 @@ async function startServer() {
         level: "success",
         message: `Scanned ${items.length} items.`
       });
-      await fs.writeJson(DB_PATH, updatedDb);
+      await saveDb(updatedDb);
     });
 
     res.json({ success: true });
@@ -73,7 +92,7 @@ async function startServer() {
   app.post("/api/settings", async (req, res) => {
     const db = await getDb();
     db.settings = { ...db.settings, ...req.body };
-    await fs.writeJson(DB_PATH, db);
+    await saveDb(db);
     res.json(db.settings);
   });
 
@@ -101,7 +120,7 @@ async function startServer() {
       });
     });
 
-    await fs.writeJson(DB_PATH, db);
+    await saveDb(db);
     res.json(results);
   });
 
@@ -120,7 +139,7 @@ async function startServer() {
       level: "info",
       message: `Staged ${results.filter(r => r.status === "success").length} items.`
     });
-    await fs.writeJson(DB_PATH, db);
+    await saveDb(db);
     res.json(results);
   });
 
@@ -139,7 +158,7 @@ async function startServer() {
     } else {
       db.collections.push({ id: nanoid(), ...collection });
     }
-    await fs.writeJson(DB_PATH, db);
+    await saveDb(db);
     res.json(db.collections);
   });
 
@@ -149,9 +168,32 @@ async function startServer() {
     const item = db.items.find((i: any) => i.id === itemId);
     if (item) {
       item.isFavorite = !item.isFavorite;
-      await fs.writeJson(DB_PATH, db);
+      await saveDb(db);
     }
     res.json({ success: true, isFavorite: item?.isFavorite });
+  });
+
+  app.post("/api/library/update-metadata", async (req, res) => {
+    const { itemId, metadata } = req.body;
+    const db = await getDb();
+    const item = db.items.find((i: any) => i.id === itemId);
+    if (item) {
+      item.metadata = { ...item.metadata, ...metadata };
+      await saveDb(db);
+    }
+    res.json({ success: true, item });
+  });
+
+  app.get("/api/logs", async (req, res) => {
+    const db = await getDb();
+    res.json(db.logs || []);
+  });
+
+  app.post("/api/logs/clear", async (req, res) => {
+    const db = await getDb();
+    db.logs = [];
+    await saveDb(db);
+    res.json({ success: true });
   });
 
   app.get("/api/system/drives", async (req, res) => {
@@ -191,8 +233,20 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Scan on startup if enabled
+    const db = await getDb();
+    if (db.settings.scanOnStartup && db.settings.sourceFolders.length > 0) {
+      console.log("Starting startup scan...");
+      ScannerService.scanFolders(db.settings.sourceFolders, db.items).then(async (items) => {
+        const updatedDb = await getDb();
+        updatedDb.items = items;
+        await saveDb(updatedDb);
+        console.log("Startup scan complete.");
+      });
+    }
   });
 }
 

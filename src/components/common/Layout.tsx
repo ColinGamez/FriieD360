@@ -1,9 +1,11 @@
 import React from 'react';
 import { 
   LayoutDashboard, UserCircle, Layout as LayoutIcon, 
-  PackageCheck, History, Settings, ChevronRight, HardDrive, Wrench, FolderHeart, Usb
+  PackageCheck, History, Settings, ChevronRight, HardDrive, Wrench, FolderHeart, Usb,
+  Loader2
 } from 'lucide-react';
 import { ViewID } from '../../types';
+import { useStore } from '../../store/useStore';
 
 interface SidebarItemProps {
   icon: any;
@@ -28,6 +30,8 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: SidebarItemProps) =
 );
 
 export const AppLayout = ({ activeTab, setActiveTab, children }: { activeTab: ViewID, setActiveTab: (tab: ViewID) => void, children: React.ReactNode }) => {
+  const { isScanning, scanProgress } = useStore();
+  
   return (
     <div className="flex h-screen bg-surface-back text-gray-100 overflow-hidden">
       <aside className="w-64 bg-surface-panel border-r border-surface-border p-6 flex flex-col">
@@ -84,6 +88,28 @@ export const AppLayout = ({ activeTab, setActiveTab, children }: { activeTab: Vi
       </aside>
 
       <main className="flex-1 overflow-y-auto relative custom-scrollbar">
+        {isScanning && (
+          <div className="sticky top-0 z-[60] bg-surface-panel/80 backdrop-blur-md border-b border-xbox-green/30 px-8 py-3 animate-in slide-in-from-top duration-300">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <Loader2 size={16} className="animate-spin text-xbox-green" />
+                <span className="text-xs font-bold uppercase tracking-wider text-white">Scanning Library...</span>
+              </div>
+              <span className="text-[10px] font-mono text-gray-500">
+                {scanProgress.current} / {scanProgress.total} files
+              </span>
+            </div>
+            <div className="h-1.5 w-full bg-surface-border rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-xbox-green transition-all duration-500 ease-out shadow-[0_0_10px_rgba(16,124,16,0.5)]"
+                style={{ width: `${(scanProgress.current / (scanProgress.total || 1)) * 100}%` }}
+              />
+            </div>
+            <p className="text-[9px] text-gray-500 mt-1.5 truncate font-mono opacity-60">
+              {scanProgress.folder}
+            </p>
+          </div>
+        )}
         <div className="h-1 bg-xbox-green/30 w-full sticky top-0 z-50" />
         {children}
       </main>

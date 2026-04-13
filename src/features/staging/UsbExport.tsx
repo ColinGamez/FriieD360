@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../store/useStore';
 import { Usb, HardDrive, ArrowRight, Play, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -16,8 +16,23 @@ export const UsbExport = () => {
       .catch(err => console.error('Failed to fetch drives', err));
   }, []);
 
+  const formatSize = (bytes: number) => {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const totalStagedSize = useMemo(() => {
+    return items.filter(i => stagedIds.includes(i.id)).reduce((acc, i) => acc + i.size, 0);
+  }, [items, stagedIds]);
+
+  const selectedDriveInfo = drives.find(d => d.id === selectedDrive);
+  const hasEnoughSpace = !selectedDriveInfo || !selectedDriveInfo.freeSpace || selectedDriveInfo.freeSpace > totalStagedSize;
+
   const handleExport = async () => {
-    if (!selectedDrive) return;
+    if (!selectedDrive || !hasEnoughSpace) return;
     setIsExporting(true);
     
     try {
@@ -75,7 +90,9 @@ export const UsbExport = () => {
                                 <HardDrive className={selectedDrive === drive.id ? 'text-xbox-green' : 'text-gray-500'} />
                                 <div>
                                     <p className="font-bold">{drive.label}</p>
-                                    <p className="text-xs text-gray-500">{drive.type} ({drive.id})</p>
+                                    <p className="text-xs text-gray-500">
+                                      {drive.id} • {drive.freeSpace ? `${formatSize(drive.freeSpace)} free` : 'Unknown free space'}
+                                    </p>
                                 </div>
                             </div>
                             {selectedDrive === drive.id && <CheckCircle2 size={18} className="text-xbox-green" />}
@@ -93,7 +110,16 @@ export const UsbExport = () => {
                 <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">2. Export Summary</h4>
                 <div className="flex-1 space-y-3">
                     <div className="flex justify-between text-sm"><span className="text-gray-500">Items to Copy:</span><span className="font-bold">{stagedIds.length}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Total Size:</span><span className="font-bold">{formatSize(totalStagedSize)}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-gray-500">Destination:</span><span className="font-mono text-xbox-green truncate max-w-[150px]">{selectedDrive || 'Not Selected'}</span></div>
+                    
+                    {!hasEnoughSpace && (
+                      <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-500 text-xs">
+                        <AlertCircle size={14} />
+                        <span>Not enough free space on target drive!</span>
+                      </div>
+                    )}
+
                     <div className="pt-4 mt-4 border-t border-surface-border">
                         <p className="text-[10px] text-gray-500 uppercase font-black leading-relaxed">
                             Structure: <br/>
