@@ -57,6 +57,12 @@ async function startServer() {
   });
 
   app.post("/api/scanner/scan", async (req, res) => {
+    const { deep } = req.body;
+    const currentProgress = ScannerService.getProgress();
+    if (currentProgress.isScanning) {
+      return res.status(400).json({ error: "Scan already in progress" });
+    }
+
     const db = await getDb();
     const sourceFolders = db.settings.sourceFolders;
 
@@ -65,15 +71,21 @@ async function startServer() {
     }
 
     // Run scan in background
-    ScannerService.scanFolders(sourceFolders, db.items).then(async (items) => {
+    ScannerService.scanFolders(sourceFolders, db.items, deep).then(async (items) => {
       const updatedDb = await getDb();
       updatedDb.items = items;
       updatedDb.logs.push({
         id: nanoid(),
         timestamp: new Date().toISOString(),
         level: "success",
-        message: `Scanned ${items.length} items.`
+        message: `${deep ? 'Deep' : 'Standard'} scan completed. Found ${items.length} items.`
       });
+      
+      // Prune logs if they exceed 100 entries to keep db.json manageable
+      if (updatedDb.logs.length > 100) {
+        updatedDb.logs = updatedDb.logs.slice(-100);
+      }
+
       await saveDb(updatedDb);
     });
 
@@ -182,6 +194,19 @@ async function startServer() {
       await saveDb(db);
     }
     res.json({ success: true, item });
+  });
+
+  app.post("/api/library/clear", async (req, res) => {
+    const db = await getDb();
+    db.items = [];
+    db.logs.push({
+      id: nanoid(),
+      timestamp: new Date().toISOString(),
+      level: "warn",
+      message: "Library database cleared by user."
+    });
+    await saveDb(db);
+    res.json({ success: true });
   });
 
   app.get("/api/logs", async (req, res) => {

@@ -16,7 +16,7 @@ interface AppState {
   fetchItems: () => Promise<void>;
   fetchSettings: () => Promise<void>;
   updateSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
-  triggerScan: () => Promise<void>;
+  triggerScan: (deep?: boolean) => Promise<void>;
   toggleFavorite: (itemId: string) => Promise<void>;
   upsertCollection: (collection: Partial<Collection>) => Promise<void>;
   addItemToCollection: (collectionId: string, itemId: string) => Promise<void>;
@@ -76,10 +76,14 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  triggerScan: async () => {
+  triggerScan: async (deep = false) => {
     set({ isScanning: true });
     try {
-      const res = await fetch('/api/scanner/scan', { method: 'POST' });
+      const res = await fetch('/api/scanner/scan', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deep })
+      });
       if (!res.ok) throw new Error('Scan failed');
       
       // Start polling for progress

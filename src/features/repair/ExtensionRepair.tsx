@@ -44,7 +44,7 @@ export const ExtensionRepair = () => {
         <h3 className="text-2xl font-bold text-white">System Optimized</h3>
         <p className="mt-2 text-center max-w-xs">All detected Xbox 360 content files in your library have correct extensions.</p>
         <button 
-          onClick={triggerScan}
+          onClick={() => triggerScan(true)}
           className="mt-8 px-6 py-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all text-sm font-bold"
         >
           Run Deep Scan

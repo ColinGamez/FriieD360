@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Palette, Star, AlertCircle, PackageCheck } from 'lucide-react';
+import { Package, Palette, Star, AlertCircle, PackageCheck, RefreshCw } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 
 const StatCard = ({ title, value, icon: Icon, color }: any) => (
@@ -17,7 +17,7 @@ const StatCard = ({ title, value, icon: Icon, color }: any) => (
 );
 
 export const Dashboard = () => {
-  const { items, stagedIds, setActiveTab } = useStore();
+  const { items, stagedIds, setActiveTab, triggerScan, isScanning } = useStore();
   const [recentLogs, setRecentLogs] = React.useState<any[]>([]);
   
   React.useEffect(() => {
@@ -25,7 +25,7 @@ export const Dashboard = () => {
       .then(res => res.json())
       .then(data => setRecentLogs(data.reverse().slice(0, 5)))
       .catch(err => console.error('Failed to fetch logs', err));
-  }, []);
+  }, [isScanning]);
 
   const avatarCount = items.filter(i => i.type === 'avatar_item').length;
   const themeCount = items.filter(i => i.type === 'theme').length;
@@ -34,9 +34,19 @@ export const Dashboard = () => {
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in duration-500">
-      <header>
-        <h2 className="text-3xl font-bold">Welcome, Chief</h2>
-        <p className="text-gray-400 mt-1">System is healthy. All source folders are indexed.</p>
+      <header className="flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-bold">Welcome, Chief</h2>
+          <p className="text-gray-400 mt-1">System is healthy. All source folders are indexed.</p>
+        </div>
+        <button 
+          onClick={() => triggerScan(true)}
+          disabled={isScanning}
+          className="flex items-center gap-2 px-4 py-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all disabled:opacity-50 text-sm font-bold"
+        >
+          <RefreshCw size={16} className={isScanning ? 'animate-spin' : ''} />
+          {isScanning ? 'Scanning...' : 'Deep Scan'}
+        </button>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -87,11 +87,21 @@ export const LibraryView = ({ title, type }: LibraryViewProps) => {
           </button>
 
           <button 
-            onClick={triggerScan}
+            onClick={() => triggerScan(true)}
             disabled={isScanning}
-            className="flex items-center space-x-2 px-4 py-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all disabled:opacity-50"
+            className="flex items-center space-x-2 px-4 py-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all disabled:opacity-50 group"
+            title="Re-verify all files, ignoring cache"
           >
-            {isScanning ? <Loader2 size={18} className="animate-spin text-xbox-green" /> : <RefreshCw size={18} />}
+            {isScanning ? <Loader2 size={18} className="animate-spin text-xbox-green" /> : <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-500" />}
+            <span className="text-sm font-bold">{isScanning ? 'Scanning...' : 'Deep Scan'}</span>
+          </button>
+
+          <button 
+            onClick={() => triggerScan(false)}
+            disabled={isScanning}
+            className="flex items-center space-x-2 px-4 py-2 bg-xbox-green rounded-lg hover:bg-xbox-hover transition-all disabled:opacity-50"
+          >
+            {isScanning ? <Loader2 size={18} className="animate-spin text-white" /> : <RefreshCw size={18} />}
             <span className="text-sm font-bold">{isScanning ? 'Scanning...' : 'Scan Folders'}</span>
           </button>
 

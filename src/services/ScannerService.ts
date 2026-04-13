@@ -15,7 +15,7 @@ export class ScannerService {
 
   static getProgress() { return this.progress; }
 
-  static async scanFolders(folders: string[], existingItems: any[]) {
+  static async scanFolders(folders: string[], existingItems: any[], deep: boolean = false) {
     this.progress = { total: 0, current: 0, folder: '', isScanning: true };
     
     const cache = new Map(existingItems.map(i => [i.fullPath, i]));
@@ -30,7 +30,7 @@ export class ScannerService {
     // Second pass: walk and process
     for (const folder of folders) {
       if (!(await fs.pathExists(folder))) continue;
-      await this.walk(folder, cache, results);
+      await this.walk(folder, cache, results, deep);
     }
 
     this.progress.isScanning = false;
@@ -43,7 +43,7 @@ export class ScannerService {
       for (const file of files) {
         const fullPath = path.join(dir, file);
         try {
-          const stat = await fs.lstat(fullPath); // Use lstat to avoid following broken symlinks
+          const stat = await fs.lstat(fullPath);
           if (stat.isDirectory()) {
             await this.countFiles(fullPath);
           } else {
@@ -58,7 +58,7 @@ export class ScannerService {
     }
   }
 
-  private static async walk(dir: string, cache: Map<string, any>, results: any[]) {
+  private static async walk(dir: string, cache: Map<string, any>, results: any[], deep: boolean) {
     this.progress.folder = dir;
     try {
       const files = await fs.readdir(dir);
@@ -69,12 +69,13 @@ export class ScannerService {
           const stat = await fs.lstat(fullPath);
 
           if (stat.isDirectory()) {
-            await this.walk(fullPath, cache, results);
+            await this.walk(fullPath, cache, results, deep);
           } else {
             this.progress.current++;
             
             const cached = cache.get(fullPath);
-            if (cached && cached.dateModified === stat.mtime.toISOString()) {
+            // In deep scan, we ignore the cache and re-process everything
+            if (!deep && cached && cached.dateModified === stat.mtime.toISOString()) {
               results.push(cached);
               continue;
             }

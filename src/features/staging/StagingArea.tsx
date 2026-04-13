@@ -114,7 +114,7 @@ export const StagingArea = () => {
                   <div className="flex items-center space-x-2 text-xbox-green/80">
                     <Folder size={14} />
                     <p className="text-[10px] font-mono truncate">
-                      Content/0000.../{item.type === 'avatar_item' ? 'FFED0707' : 'FFFE07D1'}/.../{item.fileName}
+                      Content/0000.../{item.metadata.titleId || (item.type === 'avatar_item' ? 'FFED0707' : 'FFFE07D1')}/.../{item.fileName}
                     </p>
                   </div>
                 </div>

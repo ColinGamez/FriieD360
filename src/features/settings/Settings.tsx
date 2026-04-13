@@ -49,7 +49,7 @@ export const Settings = () => {
           <p className="text-gray-500 mt-1">Configure your local environment and staging paths.</p>
         </div>
         <button 
-          onClick={triggerScan}
+          onClick={() => triggerScan(false)}
           disabled={isScanning || settings.sourceFolders.length === 0}
           className="flex items-center space-x-2 px-6 py-3 bg-xbox-green hover:bg-xbox-hover disabled:bg-surface-card disabled:text-gray-600 rounded-xl font-bold transition-all shadow-lg shadow-xbox-green/10"
         >
@@ -151,6 +151,20 @@ export const Settings = () => {
           <div className="flex items-center space-x-2 text-blue-400 opacity-70">
             <CheckCircle2 size={14} />
             <span className="text-xs">This will mark items in your library as "Installed" based on file name and size.</span>
+          </div>
+
+          <div className="pt-8 border-t border-surface-border">
+            <button 
+              onClick={async () => {
+                if (confirm('Are you sure you want to clear the entire library? This will reset all favorites and metadata overrides.')) {
+                  await fetch('/api/library/clear', { method: 'POST' });
+                  window.location.reload();
+                }
+              }}
+              className="text-xs text-red-500 hover:text-red-400 font-bold flex items-center gap-2 transition-colors"
+            >
+              <Trash2 size={14} /> Clear Library Database
+            </button>
           </div>
         </div>
       </section>

@@ -28,6 +28,17 @@ export class MetadataService {
     '4D5307E1': { name: 'Gears of War', franchise: 'Gears of War' },
     '4D53082D': { name: 'Gears of War 2', franchise: 'Gears of War' },
     '4D5308AB': { name: 'Gears of War 3', franchise: 'Gears of War' },
+    '4D530A26': { name: 'Gears of War: Judgment', franchise: 'Gears of War' },
+    '4D5307D5': { name: 'Mass Effect', franchise: 'Mass Effect' },
+    '425607E1': { name: 'Mass Effect 2', franchise: 'Mass Effect' },
+    '425607E3': { name: 'Mass Effect 3', franchise: 'Mass Effect' },
+    '53450817': { name: 'Dead Space', franchise: 'Dead Space' },
+    '5345083C': { name: 'Dead Space 2', franchise: 'Dead Space' },
+    '5345085C': { name: 'Dead Space 3', franchise: 'Dead Space' },
+    '4D5307E8': { name: 'Forza Motorsport 2', franchise: 'Forza' },
+    '4D53084D': { name: 'Forza Motorsport 3', franchise: 'Forza' },
+    '4D530917': { name: 'Forza Motorsport 4', franchise: 'Forza' },
+    '584111F7': { name: 'Forza Horizon 2', franchise: 'Forza' },
     'FFED0707': { name: 'Avatar Asset', franchise: 'System' },
     'FFFE07D1': { name: 'Xbox Dashboard', franchise: 'System' },
   };
@@ -78,6 +89,7 @@ export class MetadataService {
       const signature = buffer.toString('utf-8', 0, 4);
       if (signature.startsWith('CON')) return { isValid: true, format: 'CON' };
       if (signature.startsWith('LIVE')) return { isValid: true, format: 'LIVE' };
+      if (signature.startsWith('PIRS')) return { isValid: true, format: 'PIRS' };
       
       return { isValid: false, format: 'Unknown' };
     } catch {
