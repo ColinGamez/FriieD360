@@ -31,13 +31,39 @@ export const AppLayout = ({ activeTab, setActiveTab, children }: { activeTab: Vi
   return (
     <div className="flex h-screen bg-surface-back text-gray-100 overflow-hidden">
       <aside className="w-64 bg-surface-panel border-r border-surface-border p-6 flex flex-col">
-        <div className="mb-10 px-2 flex items-center space-x-2">
-          <div className="w-8 h-8 bg-xbox-green rounded-md flex items-center justify-center shadow-lg shadow-xbox-green/30">
-            <HardDrive size={18} className="text-white" />
+        <div className="mb-12 px-2 flex flex-col items-center">
+          <div className="relative w-14 h-14 mb-4 group">
+            {/* Outer Sphere - Silver/Grey Gradient */}
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-400 to-gray-600 rounded-full shadow-xl border border-white/20" />
+            
+            {/* Inner Depth */}
+            <div className="absolute inset-1 bg-gradient-to-tl from-gray-700 via-gray-500 to-gray-300 rounded-full" />
+            
+            {/* Xbox 'X' Glow Effect */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="relative w-8 h-8">
+                {/* Green Glow behind X */}
+                <div className="absolute inset-0 bg-xbox-green blur-[4px] opacity-60 rounded-full" />
+                
+                {/* The X bars */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-7 bg-xbox-green rotate-45 rounded-full shadow-[0_0_10px_rgba(16,124,16,1)]" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-7 bg-xbox-green -rotate-45 rounded-full shadow-[0_0_10px_rgba(16,124,16,1)]" />
+                
+                {/* Inner X highlight */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 bg-white/40 rotate-45 rounded-full" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 bg-white/40 -rotate-45 rounded-full" />
+              </div>
+            </div>
+            
+            {/* Surface Shine */}
+            <div className="absolute top-1 left-3 w-1/2 h-1/3 bg-gradient-to-b from-white/40 to-transparent rounded-full blur-[1px]" />
           </div>
-          <div>
-            <h1 className="text-lg font-bold leading-none tracking-tight">FriieD 360</h1>
-            <p className="text-[10px] text-xbox-green font-black uppercase tracking-widest mt-1">Studio</p>
+
+          <div className="text-center">
+            <h1 className="text-2xl font-light tracking-tighter text-white leading-none flex items-center justify-center">
+              <span className="font-bold text-xbox-green mr-0.5">FriieD</span>360
+            </h1>
+            <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.5em] mt-2 ml-1 opacity-80">Studio</p>
           </div>
         </div>
 

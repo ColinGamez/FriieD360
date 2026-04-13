@@ -1,4 +1,4 @@
-# FriieD 360 Studio
+# FriieD360 Studio
 
 A modern, local-first Xbox 360 content manager for avatar items and themes.
 

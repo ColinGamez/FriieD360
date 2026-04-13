@@ -156,7 +156,7 @@ export const Settings = () => {
       </section>
 
       <footer className="text-center pt-10 text-gray-600 text-[10px] uppercase tracking-[0.2em] font-black">
-        FriieD 360 Studio • Build 1.0.0
+        FriieD360 Studio • Build 1.0.0
       </footer>
     </div>
   );
