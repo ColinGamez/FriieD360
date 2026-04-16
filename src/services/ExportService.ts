@@ -7,6 +7,19 @@ import { StagingService } from './StagingService';
 const execAsync = promisify(exec);
 
 export class ExportService {
+  static async getFreeSpace(targetPath: string) {
+    try {
+      if (process.platform === 'win32') {
+        const drive = path.parse(targetPath).root;
+        const { stdout } = await execAsync(`powershell "Get-PSDrive -Name ${drive.replace(':', '')} | Select-Object -ExpandProperty Free"`);
+        return parseInt(stdout.trim());
+      }
+      return null;
+    } catch (err) {
+      return null;
+    }
+  }
+
   static async listDrives() {
     try {
       if (process.platform === 'win32') {

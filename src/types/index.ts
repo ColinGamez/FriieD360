@@ -1,12 +1,20 @@
-export type ViewID = 'dashboard' | 'avatar' | 'themes' | 'staging' | 'activity' | 'settings' | 'repair' | 'collections' | 'usb_export';
+export type ViewID = 'dashboard' | 'avatar' | 'themes' | 'dlc' | 'gamerpics' | 'games' | 'staging' | 'activity' | 'settings' | 'repair' | 'collections' | 'usb_export' | 'library' | 'profiles';
 
-export type ContentType = 'avatar_item' | 'theme';
+export type ContentType = 'avatar_item' | 'theme' | 'dlc' | 'gamerpic' | 'xbla' | 'god' | 'demo' | 'title_update';
 
 export interface ItemMetadata {
   titleId: string;
   gameName: string;
   category: string;
   tags: string[];
+  coverUrl?: string;
+  description?: string;
+  technical?: {
+    profileId: string;
+    consoleId: string;
+    deviceId: string;
+    mediaId?: string;
+  };
 }
 
 export interface ContentItem {
@@ -42,6 +50,9 @@ export interface AppSettings {
   profileId?: string;
   theme: 'dark';
   scanOnStartup: boolean;
+  autoRepair: boolean;
+  customMappings: Record<string, string>;
+  profileMappings?: Record<string, string>;
 }
 
 export interface ActivityLog {

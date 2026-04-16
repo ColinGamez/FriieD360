@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import os from "os";
 import fs from "fs-extra";
 import { nanoid } from "nanoid";
 import { ScannerService } from "./src/services/ScannerService";
@@ -8,6 +9,8 @@ import { RepairService } from "./src/services/RepairService";
 import { StagingService } from "./src/services/StagingService";
 import { ExportService } from "./src/services/ExportService";
 import { InstalledContentService } from "./src/services/InstalledContentService";
+import { RenameService } from "./src/services/RenameService";
+import { MetadataService } from "./src/services/MetadataService";
 
 const DB_PATH = path.join(process.cwd(), "db.json");
 let isWriting = false;
@@ -17,7 +20,7 @@ async function getDb() {
   if (!(await fs.pathExists(DB_PATH))) {
     const initialDb = {
       items: [],
-      settings: { sourceFolders: [], outputFolder: "", theme: "dark", scanOnStartup: false },
+      settings: { sourceFolders: [], outputFolder: "", theme: "dark", scanOnStartup: false, autoRepair: false, customMappings: {} },
       collections: [],
       logs: []
     };
@@ -71,7 +74,7 @@ async function startServer() {
     }
 
     // Run scan in background
-    ScannerService.scanFolders(sourceFolders, db.items, deep).then(async (items) => {
+    ScannerService.scanFolders(sourceFolders, db.items, deep, db.settings.autoRepair, db.settings.customMappings || {}).then(async (items) => {
       const updatedDb = await getDb();
       updatedDb.items = items;
       updatedDb.logs.push({
@@ -174,6 +177,16 @@ async function startServer() {
     res.json(db.collections);
   });
 
+  app.post("/api/collections/delete", async (req, res) => {
+    const { id } = req.body;
+    const db = await getDb();
+    if (db.collections) {
+      db.collections = db.collections.filter((c: any) => c.id !== id);
+      await saveDb(db);
+    }
+    res.json(db.collections || []);
+  });
+
   app.post("/api/library/favorite", async (req, res) => {
     const { itemId } = req.body;
     const db = await getDb();
@@ -192,8 +205,153 @@ async function startServer() {
     if (item) {
       item.metadata = { ...item.metadata, ...metadata };
       await saveDb(db);
+      res.json({ success: true, item });
+    } else {
+      res.status(404).json({ success: false, error: "Item not found" });
     }
-    res.json({ success: true, item });
+  });
+
+  app.post("/api/library/bulk-update-metadata", async (req, res) => {
+    const { itemIds, metadata } = req.body;
+    const db = await getDb();
+    let count = 0;
+    
+    db.items.forEach((item: any) => {
+      if (itemIds.includes(item.id)) {
+        item.metadata = { ...item.metadata, ...metadata };
+        count++;
+      }
+    });
+
+    if (count > 0) {
+      await saveDb(db);
+      res.json({ success: true, count });
+    } else {
+      res.status(404).json({ success: false, error: "No items found" });
+    }
+  });
+
+  app.post("/api/library/fetch-online", async (req, res) => {
+    const { itemIds } = req.body;
+    const db = await getDb();
+    let updatedCount = 0;
+    
+    for (const item of db.items) {
+      if (itemIds.includes(item.id) && item.metadata.titleId !== 'Unknown') {
+        const onlineData = await MetadataService.simulateOnlineFetch(item.metadata.titleId);
+        if (onlineData) {
+          item.metadata = { ...item.metadata, ...onlineData };
+          updatedCount++;
+        }
+      }
+    }
+    
+    if (updatedCount > 0) {
+      db.logs.push({
+        id: nanoid(),
+        timestamp: new Date().toISOString(),
+        level: "success",
+        message: `Successfully fetched online metadata for ${updatedCount} items.`
+      });
+      await saveDb(db);
+    }
+    
+    res.json({ success: true, updatedCount });
+  });
+
+  app.post("/api/library/bulk-autofix", async (req, res) => {
+    const { itemIds } = req.body;
+    const db = await getDb();
+    const results = [];
+    
+    for (const id of itemIds) {
+      const item = db.items.find((i: any) => i.id === id);
+      if (item) {
+        const fixedMeta = MetadataService.deriveMetadata(item.fullPath, item.fileName);
+        item.metadata = { ...item.metadata, ...fixedMeta };
+        results.push(item);
+      }
+    }
+    
+    if (results.length > 0) {
+      await saveDb(db);
+    }
+    res.json(results);
+  });
+
+  app.post("/api/library/bulk-delete", async (req, res) => {
+    const { itemIds } = req.body;
+    const db = await getDb();
+    const initialCount = db.items.length;
+    db.items = db.items.filter((item: any) => !itemIds.includes(item.id));
+    
+    if (db.items.length < initialCount) {
+      await saveDb(db);
+      res.json({ success: true, count: initialCount - db.items.length });
+    } else {
+      res.status(404).json({ success: false, error: "No items found" });
+    }
+  });
+
+  app.post("/api/library/rename/preview", async (req, res) => {
+    const { itemIds, template } = req.body;
+    const db = await getDb();
+    const itemsToRename = db.items.filter((i: any) => itemIds.includes(i.id));
+    const ops = await RenameService.preview(itemsToRename, template);
+    res.json(ops);
+  });
+
+  app.post("/api/library/rename/apply", async (req, res) => {
+    const { operations } = req.body;
+    const db = await getDb();
+    const results = await RenameService.apply(operations);
+
+    // Update database with new paths
+    results.forEach(op => {
+      if (op.status === "success") {
+        const item = db.items.find((i: any) => i.id === op.id);
+        if (item) {
+          item.fullPath = op.newPath;
+          item.fileName = op.newFileName;
+          item.name = path.parse(op.newFileName).name;
+        }
+      }
+      
+      db.logs.push({
+        id: nanoid(),
+        timestamp: new Date().toISOString(),
+        level: op.status === "success" ? "success" : "error",
+        message: op.status === "success" 
+          ? `Renamed file to ${op.newFileName}`
+          : `Failed to rename ${op.fileName}: ${op.error}`
+      });
+    });
+
+    await saveDb(db);
+    res.json(results);
+  });
+
+  app.post("/api/library/integrity-check", async (req, res) => {
+    const db = await getDb();
+    const results = [];
+    let removedCount = 0;
+    const itemsToKeep = [];
+
+    for (const item of db.items) {
+      if (await fs.pathExists(item.fullPath)) {
+        itemsToKeep.push(item);
+      } else {
+        removedCount++;
+        results.push({ id: item.id, name: item.name, status: 'missing' });
+      }
+    }
+
+    if (removedCount > 0) {
+      db.items = itemsToKeep;
+      await saveDb(db);
+    }
+
+    res.json({ success: true, removedCount, results });
   });
 
   app.post("/api/library/clear", async (req, res) => {
@@ -226,6 +384,13 @@ async function startServer() {
     res.json(drives);
   });
 
+  app.get("/api/system/free-space", async (req, res) => {
+    const { path } = req.query;
+    if (!path) return res.status(400).json({ error: "Path is required" });
+    const free = await ExportService.getFreeSpace(path as string);
+    res.json({ free });
+  });
+
   app.post("/api/export/usb", async (req, res) => {
     const { itemIds, usbPath } = req.body;
     const db = await getDb();
@@ -241,6 +406,16 @@ async function startServer() {
     } catch (err) {
       res.status(500).json({ error: "Failed to scan drive" });
     }
+  });
+
+  app.get("/api/system/status", (req, res) => {
+    res.json({
+      cpu: Math.round(os.loadavg()[0] * 100 / os.cpus().length),
+      memory: Math.round((1 - os.freemem() / os.totalmem()) * 100),
+      uptime: os.uptime(),
+      platform: os.platform(),
+      arch: os.arch()
+    });
   });
 
   // Vite middleware for development
@@ -265,7 +440,7 @@ async function startServer() {
     const db = await getDb();
     if (db.settings.scanOnStartup && db.settings.sourceFolders.length > 0) {
       console.log("Starting startup scan...");
-      ScannerService.scanFolders(db.settings.sourceFolders, db.items).then(async (items) => {
+      ScannerService.scanFolders(db.settings.sourceFolders, db.items, false, db.settings.autoRepair, db.settings.customMappings || {}).then(async (items) => {
         const updatedDb = await getDb();
         updatedDb.items = items;
         await saveDb(updatedDb);

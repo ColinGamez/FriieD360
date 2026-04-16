@@ -1,19 +1,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../store/useStore';
-import { Usb, HardDrive, ArrowRight, Play, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Usb, HardDrive, ArrowRight, Play, CheckCircle2, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 
 export const UsbExport = () => {
   const { stagedIds, items, clearStaging } = useStore();
   const [drives, setDrives] = useState<any[]>([]);
   const [selectedDrive, setSelectedDrive] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [summary, setSummary] = useState<any>(null);
 
+  const fetchDrives = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch('/api/system/drives');
+      const data = await res.json();
+      setDrives(data);
+    } catch (err) {
+      console.error('Failed to fetch drives', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
-    fetch('/api/system/drives')
-      .then(res => res.json())
-      .then(setDrives)
-      .catch(err => console.error('Failed to fetch drives', err));
+    fetchDrives();
   }, []);
 
   const formatSize = (bytes: number) => {
@@ -76,7 +87,17 @@ export const UsbExport = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <section className="space-y-4">
-                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest">1. Select Target Drive</h4>
+                <div className="flex justify-between items-center">
+                    <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest">1. Select Target Drive</h4>
+                    <button 
+                        onClick={fetchDrives}
+                        disabled={isRefreshing}
+                        className="p-1.5 text-gray-500 hover:text-xbox-green transition-colors rounded-md hover:bg-xbox-green/10"
+                        title="Refresh Drives"
+                    >
+                        <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+                    </button>
+                </div>
                 <div className="space-y-2 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
                     {drives.map(drive => (
                         <button 

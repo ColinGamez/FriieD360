@@ -1,13 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
-import { PackageCheck, ArrowRight, Trash2, Play, CheckCircle, AlertCircle, Copy, Folder } from 'lucide-react';
+import { PackageCheck, ArrowRight, Trash2, Play, CheckCircle, AlertCircle, Copy, Folder, HardDrive, LayoutList, Network, ShieldCheck } from 'lucide-react';
+import { FolderTreePreview } from './FolderTreePreview';
+import { UsbExportWizard } from './UsbExportWizard';
 
 export const StagingArea = () => {
   const { items, stagedIds, settings, removeFromStaging, clearStaging } = useStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<any[] | null>(null);
+  const [freeSpace, setFreeSpace] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'tree'>('list');
+  const [showWizard, setShowWizard] = useState(false);
 
-  const stagedItems = items.filter(i => stagedIds.includes(i.id));
+  const stagedItems = useMemo(() => items.filter(i => stagedIds.includes(i.id)), [items, stagedIds]);
+  
+  const totalSize = useMemo(() => stagedItems.reduce((acc, i) => acc + i.size, 0), [stagedItems]);
+
+  useEffect(() => {
+    if (settings?.outputFolder) {
+      fetch(`/api/system/free-space?path=${encodeURIComponent(settings.outputFolder)}`)
+        .then(res => res.json())
+        .then(data => setFreeSpace(data.free))
+        .catch(err => console.error("Failed to check free space", err));
+    }
+  }, [settings?.outputFolder]);
+
+  const formatSize = (bytes: number) => {
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    if (bytes === 0) return '0 B';
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const hasEnoughSpace = freeSpace === null || freeSpace > totalSize;
 
   const handleExecute = async () => {
     setIsProcessing(true);
@@ -19,9 +45,16 @@ export const StagingArea = () => {
       });
       const data = await res.json();
       setResults(data);
-      if (!data.some((r: any) => r.status === 'error')) clearStaging();
+      const errorCount = data.filter((r: any) => r.status === 'error').length;
+      if (errorCount === 0) {
+        useStore.getState().addToast('Staging completed successfully', 'success');
+        clearStaging();
+      } else {
+        useStore.getState().addToast(`Staging completed with ${errorCount} errors`, 'error');
+      }
     } catch (err) {
       console.error("Staging failed", err);
+      useStore.getState().addToast('Staging operation failed', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -45,17 +78,43 @@ export const StagingArea = () => {
           <p className="text-gray-500 mt-1">Preparing {stagedItems.length} items for export.</p>
         </div>
         <div className="flex space-x-3">
+          <div className="flex flex-col items-end justify-center px-4 border-r border-surface-border mr-2">
+            <p className="text-[10px] text-gray-500 uppercase font-black">Total Size</p>
+            <p className="text-sm font-bold text-white">{formatSize(totalSize)}</p>
+          </div>
           <button onClick={clearStaging} className="px-4 py-2 text-gray-400 hover:text-white transition-colors">Clear All</button>
           <button 
-            onClick={handleExecute}
-            disabled={isProcessing || !settings?.outputFolder || stagedIds.length === 0}
+            onClick={() => setShowWizard(true)}
+            disabled={isProcessing || !settings?.outputFolder || stagedIds.length === 0 || !hasEnoughSpace}
             className="px-8 py-3 bg-xbox-green hover:bg-xbox-hover disabled:bg-surface-card disabled:text-gray-600 rounded-xl font-bold transition-all shadow-lg shadow-xbox-green/20 flex items-center space-x-2"
           >
-            {isProcessing ? <Play className="animate-pulse" /> : <Copy size={20} />}
-            <span>{isProcessing ? 'Copying Files...' : 'Execute Staging'}</span>
+            <ShieldCheck size={20} />
+            <span>Launch Export Wizard</span>
           </button>
         </div>
       </header>
+
+      {settings?.outputFolder && (
+        <div className={`p-4 rounded-xl flex items-center justify-between border ${
+          hasEnoughSpace ? 'bg-xbox-green/5 border-xbox-green/20 text-xbox-green' : 'bg-red-500/10 border-red-500/50 text-red-500'
+        }`}>
+          <div className="flex items-center space-x-3">
+            <HardDrive size={20} />
+            <div>
+              <p className="text-xs font-bold">Target: {settings.outputFolder}</p>
+              <p className="text-[10px] opacity-70">
+                {freeSpace !== null ? `${formatSize(freeSpace)} free available` : 'Checking free space...'}
+              </p>
+            </div>
+          </div>
+          {!hasEnoughSpace && (
+            <div className="flex items-center space-x-2">
+              <AlertCircle size={16} />
+              <span className="text-xs font-bold uppercase">Insufficient Space</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {!settings?.outputFolder && (
         <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-center space-x-3 text-red-500">
@@ -92,43 +151,73 @@ export const StagingArea = () => {
           </div>
         </div>
       ) : (
-        <div className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
-          <div className="p-4 bg-surface-panel border-b border-surface-border flex items-center text-xs font-bold text-gray-500 uppercase tracking-widest">
-            <div className="flex-1">Item & Source</div>
-            <div className="w-8"></div>
-            <div className="flex-1 pl-8">Standardized Destination Path</div>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Staging Queue</h4>
+            <div className="flex bg-surface-card border border-surface-border rounded-lg p-1">
+              <button 
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-xbox-green text-white shadow-lg shadow-xbox-green/20' : 'text-gray-500 hover:text-gray-300'}`}
+                title="List View"
+              >
+                <LayoutList size={16} />
+              </button>
+              <button 
+                onClick={() => setViewMode('tree')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'tree' ? 'bg-xbox-green text-white shadow-lg shadow-xbox-green/20' : 'text-gray-500 hover:text-gray-300'}`}
+                title="Structure Preview"
+              >
+                <Network size={16} />
+              </button>
+            </div>
           </div>
-          <div className="divide-y divide-surface-border/50 max-h-[60vh] overflow-y-auto custom-scrollbar">
-            {stagedItems.map(item => (
-              <div key={item.id} className="p-4 flex items-center group hover:bg-white/[0.02] transition-colors">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold truncate">{item.name}</p>
-                  <p className="text-[10px] text-gray-500 truncate">{item.fullPath}</p>
-                </div>
-                
-                <div className="px-4 text-gray-700">
-                  <ArrowRight size={20} />
-                </div>
 
-                <div className="flex-1 min-w-0 pl-4">
-                  <div className="flex items-center space-x-2 text-xbox-green/80">
-                    <Folder size={14} />
-                    <p className="text-[10px] font-mono truncate">
-                      Content/0000.../{item.metadata.titleId || (item.type === 'avatar_item' ? 'FFED0707' : 'FFFE07D1')}/.../{item.fileName}
-                    </p>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => removeFromStaging(item.id)}
-                  className="ml-4 p-2 text-gray-600 hover:text-red-500 transition-colors"
-                >
-                  <Trash2 size={18} />
-                </button>
+          {viewMode === 'tree' ? (
+            <FolderTreePreview items={stagedItems} />
+          ) : (
+            <div className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+              <div className="p-4 bg-surface-panel border-b border-surface-border flex items-center text-xs font-bold text-gray-500 uppercase tracking-widest">
+                <div className="flex-1">Item & Source</div>
+                <div className="w-8"></div>
+                <div className="flex-1 pl-8">Standardized Destination Path</div>
               </div>
-            ))}
-          </div>
+              <div className="divide-y divide-surface-border/50 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                {stagedItems.map(item => (
+                  <div key={item.id} className="p-4 flex items-center group hover:bg-white/[0.02] transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold truncate">{item.name}</p>
+                      <p className="text-[10px] text-gray-500 truncate">{item.fullPath}</p>
+                    </div>
+                    
+                    <div className="px-4 text-gray-700">
+                      <ArrowRight size={20} />
+                    </div>
+
+                    <div className="flex-1 min-w-0 pl-4">
+                      <div className="flex items-center space-x-2 text-xbox-green/80">
+                        <Folder size={14} />
+                        <p className="text-[10px] font-mono truncate">
+                          Content/0000.../{item.metadata.titleId || (item.type === 'avatar_item' ? 'FFED0707' : 'FFFE07D1')}/.../{item.fileName}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => removeFromStaging(item.id)}
+                      className="ml-4 p-2 text-gray-600 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+      )}
+
+      {showWizard && (
+        <UsbExportWizard onClose={() => setShowWizard(false)} />
       )}
     </div>
   );

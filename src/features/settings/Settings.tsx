@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, Plus, Trash2, HardDrive, RefreshCw, AlertTriangle, CheckCircle2, Usb } from 'lucide-react';
-import { useStore } from '../../store/useStore';
+import { Folder, Plus, Trash2, HardDrive, RefreshCw, AlertTriangle, CheckCircle2, Usb, Wrench, Hash, Tag, Palette, Monitor, Zap, Moon, UserCircle } from 'lucide-react';
+import { useStore, ThemeID } from '../../store/useStore';
 
 export const Settings = () => {
-  const { settings, updateSettings, triggerScan, isScanning, fetchSettings, refreshInstalledStatus } = useStore();
+  const { settings, updateSettings, triggerScan, isScanning, fetchSettings, refreshInstalledStatus, theme, setTheme } = useStore();
   const [newPath, setNewPath] = useState('');
   const [isPathValid, setIsPathValid] = useState<boolean | null>(null);
   const [installedPath, setInstalledPath] = useState('');
+  const [mappingId, setMappingId] = useState('');
+  const [mappingName, setMappingName] = useState('');
+  const [profileId, setProfileId] = useState('');
+  const [profileName, setProfileName] = useState('');
 
   useEffect(() => { fetchSettings(); }, []);
 
@@ -110,6 +114,122 @@ export const Settings = () => {
 
       <section className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
         <div className="p-6 border-b border-surface-border flex items-center space-x-3">
+          <Palette className="text-xbox-green" size={24} />
+          <h3 className="text-xl font-bold">Visual Theme</h3>
+        </div>
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { id: 'carbon', name: 'Carbon', desc: 'Default dark studio', icon: Moon, color: '#107C10' },
+              { id: 'blades', name: 'Blades', desc: 'Classic white & green', icon: Zap, color: '#107C10' },
+              { id: 'metro', name: 'Metro', desc: 'Modern blue & gray', icon: Monitor, color: '#00a4ef' },
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id as ThemeID)}
+                className={`p-4 rounded-xl border-2 text-left transition-all group relative overflow-hidden ${
+                  theme === t.id 
+                    ? 'border-xbox-green bg-xbox-green/5' 
+                    : 'border-surface-border bg-surface-panel hover:border-xbox-green/50'
+                }`}
+              >
+                <div className="absolute top-0 right-0 w-12 h-12 opacity-10 -mr-4 -mt-4 rotate-12">
+                  <t.icon size={48} />
+                </div>
+                <t.icon size={24} className={`mb-3 ${theme === t.id ? 'text-xbox-green' : 'text-gray-500 group-hover:text-xbox-green'}`} />
+                <p className="font-bold text-sm">{t.name}</p>
+                <p className="text-[10px] text-gray-500 mt-1">{t.desc}</p>
+                <div className="mt-3 flex gap-1">
+                  <div className="w-4 h-1 rounded-full" style={{ backgroundColor: t.color }} />
+                  <div className="w-2 h-1 rounded-full bg-gray-700" />
+                  <div className="w-2 h-1 rounded-full bg-gray-800" />
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="p-4 bg-surface-panel rounded-xl border border-dashed border-surface-border">
+            <h4 className="text-[10px] font-black uppercase text-gray-500 mb-3 tracking-widest">Theme Preview</h4>
+            <div className={`p-4 rounded-lg border border-surface-border bg-surface-back theme-${theme}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded bg-xbox-green" />
+                <div>
+                  <div className="h-2 w-24 bg-gray-500 rounded mb-1" />
+                  <div className="h-1.5 w-16 bg-gray-700 rounded" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-surface-border flex items-center space-x-3">
+          <Monitor className="text-xbox-green" size={24} />
+          <h3 className="text-xl font-bold">System Information</h3>
+        </div>
+        <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="p-4 bg-surface-panel rounded-xl border border-surface-border">
+            <p className="text-[9px] font-black uppercase text-gray-500 mb-1">App Version</p>
+            <p className="text-sm font-bold">1.2.4-stable</p>
+          </div>
+          <div className="p-4 bg-surface-panel rounded-xl border border-surface-border">
+            <p className="text-[9px] font-black uppercase text-gray-500 mb-1">Environment</p>
+            <p className="text-sm font-bold">Production</p>
+          </div>
+          <div className="p-4 bg-surface-panel rounded-xl border border-surface-border">
+            <p className="text-[9px] font-black uppercase text-gray-500 mb-1">Library Size</p>
+            <p className="text-sm font-bold">{useStore.getState().items.length} Items</p>
+          </div>
+          <div className="p-4 bg-surface-panel rounded-xl border border-surface-border">
+            <p className="text-[9px] font-black uppercase text-gray-500 mb-1">Collections</p>
+            <p className="text-sm font-bold">{useStore.getState().collections.length} Groups</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-surface-border flex items-center space-x-3">
+          <RefreshCw className="text-xbox-green" size={24} />
+          <h3 className="text-xl font-bold">System Options</h3>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between p-4 bg-surface-panel rounded-xl border border-surface-border">
+            <div className="flex items-center space-x-3">
+              <RefreshCw size={20} className="text-xbox-green" />
+              <div>
+                <p className="text-sm font-bold">Scan on Startup</p>
+                <p className="text-[10px] text-gray-500">Automatically scan source folders when the app starts.</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => updateSettings({ scanOnStartup: !settings.scanOnStartup })}
+              className={`w-12 h-6 rounded-full transition-all relative ${settings.scanOnStartup ? 'bg-xbox-green' : 'bg-gray-700'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.scanOnStartup ? 'left-7' : 'left-1'}`} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-surface-panel rounded-xl border border-surface-border">
+            <div className="flex items-center space-x-3">
+              <Wrench size={20} className="text-xbox-green" />
+              <div>
+                <p className="text-sm font-bold">Auto-Repair Extensions</p>
+                <p className="text-[10px] text-gray-500">Automatically append .CON to extensionless files during scan.</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => updateSettings({ autoRepair: !settings.autoRepair })}
+              className={`w-12 h-6 rounded-full transition-all relative ${settings.autoRepair ? 'bg-xbox-green' : 'bg-gray-700'}`}
+            >
+              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.autoRepair ? 'left-7' : 'left-1'}`} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-surface-border flex items-center space-x-3">
           <HardDrive className="text-xbox-green" size={24} />
           <h3 className="text-xl font-bold">Staging Output</h3>
         </div>
@@ -122,6 +242,136 @@ export const Settings = () => {
             placeholder="E.g. D:\Clean_Xbox_USB"
             className="w-full bg-surface-panel border border-surface-border rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-xbox-green text-sm font-mono"
           />
+        </div>
+      </section>
+
+      <section className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-surface-border flex items-center space-x-3">
+          <UserCircle className="text-xbox-green" size={24} />
+          <h3 className="text-xl font-bold">Profile Mappings</h3>
+        </div>
+        <div className="p-6 space-y-6">
+          <p className="text-sm text-gray-400">Map 16-character Profile IDs to friendly names (e.g. "Main Profile").</p>
+          
+          <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+            {Object.entries(settings.profileMappings || {}).map(([id, name]) => (
+              <div key={id} className="flex items-center justify-between p-3 bg-surface-panel border border-surface-border rounded-lg group">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs font-mono text-xbox-green font-bold">{id}</span>
+                  <span className="text-sm text-gray-300">{name}</span>
+                </div>
+                <button 
+                  onClick={() => {
+                    const updated = { ...settings.profileMappings };
+                    delete updated[id];
+                    updateSettings({ profileMappings: updated });
+                  }}
+                  className="text-gray-500 hover:text-red-500 transition-colors p-1"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            ))}
+            {Object.keys(settings.profileMappings || {}).length === 0 && (
+              <p className="text-xs text-gray-600 italic text-center py-4">No profile mappings defined.</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input 
+              type="text" 
+              value={profileId}
+              onChange={(e) => setProfileId(e.target.value.toUpperCase())}
+              placeholder="Profile ID (16 hex)"
+              maxLength={16}
+              className="bg-surface-panel border border-surface-border rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-xbox-green text-sm font-mono"
+            />
+            <input 
+              type="text" 
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              placeholder="Friendly Name"
+              className="bg-surface-panel border border-surface-border rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-xbox-green text-sm"
+            />
+            <button 
+              onClick={() => {
+                if (profileId.length === 16 && profileName) {
+                  updateSettings({ profileMappings: { ...settings.profileMappings, [profileId]: profileName } });
+                  setProfileId('');
+                  setProfileName('');
+                }
+              }}
+              className="px-4 py-2 bg-xbox-green hover:bg-xbox-hover text-white rounded-lg transition-all font-bold flex items-center justify-center space-x-2"
+            >
+              <Plus size={18} />
+              <span>Add Profile</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-surface-border flex items-center space-x-3">
+          <Tag className="text-xbox-green" size={24} />
+          <h3 className="text-xl font-bold">Custom Title ID Mappings</h3>
+        </div>
+        <div className="p-6 space-y-6">
+          <p className="text-sm text-gray-400">Define custom game names for Title IDs that aren't recognized automatically.</p>
+          
+          <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+            {Object.entries(settings.customMappings || {}).map(([id, name]) => (
+              <div key={id} className="flex items-center justify-between p-3 bg-surface-panel border border-surface-border rounded-lg group">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs font-mono text-xbox-green font-bold">{id}</span>
+                  <span className="text-sm text-gray-300">{name}</span>
+                </div>
+                <button 
+                  onClick={() => {
+                    const updated = { ...settings.customMappings };
+                    delete updated[id];
+                    updateSettings({ customMappings: updated });
+                  }}
+                  className="text-gray-500 hover:text-red-500 transition-colors p-1"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            ))}
+            {Object.keys(settings.customMappings || {}).length === 0 && (
+              <p className="text-xs text-gray-600 italic text-center py-4">No custom mappings defined.</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input 
+              type="text" 
+              value={mappingId}
+              onChange={(e) => setMappingId(e.target.value.toUpperCase())}
+              placeholder="Title ID (8 hex)"
+              maxLength={8}
+              className="bg-surface-panel border border-surface-border rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-xbox-green text-sm font-mono"
+            />
+            <input 
+              type="text" 
+              value={mappingName}
+              onChange={(e) => setMappingName(e.target.value)}
+              placeholder="Game Name"
+              className="bg-surface-panel border border-surface-border rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-xbox-green text-sm"
+            />
+            <button 
+              onClick={() => {
+                if (mappingId.length === 8 && mappingName) {
+                  updateSettings({ customMappings: { ...settings.customMappings, [mappingId]: mappingName } });
+                  setMappingId('');
+                  setMappingName('');
+                }
+              }}
+              className="px-4 py-2 bg-xbox-green hover:bg-xbox-hover text-white rounded-lg transition-all font-bold flex items-center justify-center space-x-2"
+            >
+              <Plus size={18} />
+              <span>Add Mapping</span>
+            </button>
+          </div>
         </div>
       </section>
 
