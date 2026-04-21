@@ -1,5 +1,6 @@
 import React from 'react';
 import { Folder, File, ChevronRight, ChevronDown } from 'lucide-react';
+import { buildContentRelativePath } from '../../utils/contentPaths';
 
 interface TreeNode {
   name: string;
@@ -13,12 +14,7 @@ export const FolderTreePreview = ({ items }: { items: any[] }) => {
     const root: TreeNode = { name: 'Root', type: 'folder', children: {} };
 
     items.forEach(item => {
-      const typeId = getTypeMap(item.type);
-      const titleId = (item.metadata?.titleId && item.metadata.titleId !== 'Unknown') 
-        ? item.metadata.titleId.toUpperCase() 
-        : (getDefaultTitleId(item.type));
-      
-      const pathParts = ['Content', '0000000000000000', titleId, typeId];
+      const pathParts = buildContentRelativePath(item).split('/').slice(0, -1);
       let current = root;
 
       pathParts.forEach(part => {
@@ -82,26 +78,3 @@ const TreeItem = ({ node, depth, defaultOpen = false }: { node: TreeNode, depth:
     </div>
   );
 };
-
-function getTypeMap(type: string): string {
-  const map: Record<string, string> = {
-    'avatar_item': '00009000',
-    'theme': '00030000',
-    'dlc': '00000002',
-    'gamerpic': '00020000',
-    'demo': '000D0000',
-    'title_update': '000B0000',
-    'xbla': '00070000',
-    'god': '00080000'
-  };
-  return map[type] || '00000001';
-}
-
-function getDefaultTitleId(type: string): string {
-  const map: Record<string, string> = {
-    'avatar_item': 'FFED0707',
-    'theme': 'FFFE07D1',
-    'gamerpic': 'FFFE07D1'
-  };
-  return map[type] || '00000000';
-}

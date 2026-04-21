@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { buildInstalledContentKeyFromPathParts } from '../utils/contentPaths';
 
 export class InstalledContentService {
   static async scanInstalled(drivePath: string): Promise<Set<string>> {
@@ -25,7 +26,10 @@ export class InstalledContentService {
         if (stat.isDirectory()) {
           await this.walk(fullPath, set);
         } else {
-          set.add(`${file}_${stat.size}`);
+          const key = buildInstalledContentKeyFromPathParts(fullPath.split(/[\\/]/), stat.size);
+          if (key) {
+            set.add(key);
+          }
         }
       }
     } catch (err) {

@@ -38,13 +38,26 @@ A modern, local-first Xbox 360 content manager for avatar items and themes.
 
 4. Open your browser to `http://localhost:3000`.
 
+### Production Preview
+
+1. Build the app:
+   ```bash
+   npm run build
+   ```
+
+2. Start the production server:
+   ```bash
+   npm start
+   ```
+
 ## Usage
 
-1. **Settings**: Add your source folders where you keep your Xbox 360 content.
+1. **Settings**: Add your source folders, theme, and custom Title ID/profile mappings.
 2. **Scan**: Click "Scan Now" to index your library.
-3. **Library**: Browse your Avatar Items and Themes.
-4. **Stage**: Add items to the staging queue.
-5. **Export**: Go to the USB Export tab to deploy your staged items to a drive.
+3. **Library**: Browse games, DLC, themes, avatar items, and gamerpics.
+4. **Collections**: Create curated sets and smart collections.
+5. **Maintenance**: Repair extensions, resolve duplicate entries, batch rename, and organize content paths.
+6. **Stage / Export**: Add items to the staging queue and deploy them to a removable drive.
 
 ## License
 

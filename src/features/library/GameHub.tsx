@@ -58,7 +58,7 @@ export const GameHub = ({ titleId, onClose }: GameHubProps) => {
         {/* Header Section */}
         <div className="relative h-64 shrink-0 overflow-hidden">
           <img 
-            src={MetadataService.getCoverArtUrl(titleId)} 
+            src={gameInfo?.coverUrl || MetadataService.getCoverArtUrl(titleId)} 
             alt={gameInfo?.gameName}
             className="w-full h-full object-cover blur-2xl opacity-30 scale-110"
             referrerPolicy="no-referrer"
@@ -69,7 +69,7 @@ export const GameHub = ({ titleId, onClose }: GameHubProps) => {
             <div className="flex items-center gap-8">
               <div className="w-32 h-48 bg-surface-panel rounded-xl border border-surface-border shadow-2xl overflow-hidden group">
                 <img 
-                  src={MetadataService.getCoverArtUrl(titleId)} 
+                  src={gameInfo?.coverUrl || MetadataService.getCoverArtUrl(titleId)} 
                   alt={gameInfo?.gameName}
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"

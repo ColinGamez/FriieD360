@@ -1,4 +1,5 @@
 import { ItemMetadata } from '../types';
+import { isLikelyTitleId } from '../utils/contentPaths';
 
 export class MetadataService {
   private static TITLE_MAP: Record<string, { name: string, franchise: string }> = {
@@ -94,7 +95,7 @@ export class MetadataService {
     // We iterate backwards to find the most specific one
     for (let i = pathParts.length - 1; i >= 0; i--) {
       const part = pathParts[i];
-      if (/^[0-9A-Fa-f]{8}$/.test(part) && part !== '00000000' && part !== '00009000' && part !== '00030000') {
+      if (isLikelyTitleId(part)) {
         titleId = part.toUpperCase();
         break;
       }
@@ -103,7 +104,7 @@ export class MetadataService {
     // Fallback to general regex if not found in path parts
     if (titleId === 'Unknown') {
       const titleIdMatch = fullPath.match(/[0-9A-Fa-f]{8}/g);
-      titleId = titleIdMatch?.find(id => id !== '00000000' && id !== '00009000' && id !== '00030000') || 'Unknown';
+      titleId = titleIdMatch?.find((id) => isLikelyTitleId(id)) || 'Unknown';
     }
 
     const upperTitleId = titleId.toUpperCase();

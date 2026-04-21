@@ -1,6 +1,7 @@
 export type ViewID = 'dashboard' | 'avatar' | 'themes' | 'dlc' | 'gamerpics' | 'games' | 'staging' | 'activity' | 'settings' | 'repair' | 'collections' | 'usb_export' | 'library' | 'profiles';
 
 export type ContentType = 'avatar_item' | 'theme' | 'dlc' | 'gamerpic' | 'xbla' | 'god' | 'demo' | 'title_update';
+export type AppTheme = 'carbon' | 'blades' | 'metro';
 
 export interface ItemMetadata {
   titleId: string;
@@ -48,7 +49,7 @@ export interface AppSettings {
   sourceFolders: string[];
   outputFolder: string;
   profileId?: string;
-  theme: 'dark';
+  theme: AppTheme;
   scanOnStartup: boolean;
   autoRepair: boolean;
   customMappings: Record<string, string>;

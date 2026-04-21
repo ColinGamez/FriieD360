@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { ContentItem, AppSettings, Collection, ViewID, ScanProgress } from '../types';
+import { ContentItem, AppSettings, Collection, ViewID, ScanProgress, AppTheme } from '../types';
 import { nanoid } from 'nanoid';
 
-export type ThemeID = 'carbon' | 'blades' | 'metro';
+export type ThemeID = AppTheme;
 
 export interface Toast {
   id: string;
@@ -30,6 +30,7 @@ interface AppState {
   setGlobalSearch: (search: string) => void;
   fetchItems: () => Promise<void>;
   fetchSettings: () => Promise<void>;
+  fetchCollections: () => Promise<void>;
   updateSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
   triggerScan: (deep?: boolean) => Promise<void>;
   toggleFavorite: (itemId: string) => Promise<void>;
@@ -56,7 +57,7 @@ interface AppState {
 
 export const useStore = create<AppState>((set, get) => ({
   items: [],
-  settings: { sourceFolders: [], outputFolder: '', theme: 'dark', scanOnStartup: false, autoRepair: false, customMappings: {}, profileMappings: {} },
+  settings: { sourceFolders: [], outputFolder: '', theme: 'carbon', scanOnStartup: false, autoRepair: false, customMappings: {}, profileMappings: {} },
   collections: [],
   stagedIds: [],
   isScanning: false,
@@ -69,7 +70,13 @@ export const useStore = create<AppState>((set, get) => ({
   theme: 'carbon',
   toasts: [],
 
-  setTheme: (theme) => set({ theme }),
+  setTheme: (theme) => {
+    set((state) => ({
+      theme,
+      settings: { ...state.settings, theme },
+    }));
+    void get().updateSettings({ theme });
+  },
   setActiveTab: (tab) => set({ activeTab: tab }),
   setGlobalSearch: (search) => {
     set({ globalSearch: search });
@@ -104,10 +111,21 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const res = await fetch('/api/settings');
       const data = await res.json();
-      set({ settings: data, isLoadingSettings: false });
+      const theme = (data.theme || 'carbon') as ThemeID;
+      set({ settings: data, theme, isLoadingSettings: false });
     } catch (err) {
       console.error('Failed to fetch settings', err);
       set({ isLoadingSettings: false });
+    }
+  },
+
+  fetchCollections: async () => {
+    try {
+      const res = await fetch('/api/collections');
+      const data = await res.json();
+      set({ collections: data });
+    } catch (err) {
+      console.error('Failed to fetch collections', err);
     }
   },
 
@@ -119,7 +137,7 @@ export const useStore = create<AppState>((set, get) => ({
         body: JSON.stringify({ ...get().settings, ...newSettings }),
       });
       const data = await res.json();
-      set({ settings: data });
+      set({ settings: data, theme: (data.theme || get().theme) as ThemeID });
     } catch (err) {
       console.error('Failed to update settings', err);
     }

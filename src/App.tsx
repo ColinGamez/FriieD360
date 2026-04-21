@@ -17,11 +17,12 @@ import { ProfileExplorer } from './features/profiles/ProfileExplorer';
 import { useStore } from './store/useStore';
 
 export default function App() {
-  const { activeTab, setActiveTab, fetchSettings, fetchItems } = useStore();
+  const { activeTab, setActiveTab, fetchSettings, fetchItems, fetchCollections } = useStore();
 
   useEffect(() => {
     fetchSettings();
     fetchItems();
+    fetchCollections();
   }, []);
 
   const renderContent = () => {
@@ -32,6 +33,7 @@ export default function App() {
       case 'dlc': return <LibraryView title="DLC & Content" types={['dlc', 'demo', 'title_update']} />;
       case 'gamerpics': return <LibraryView title="Gamerpics" types={['gamerpic']} />;
       case 'games': return <LibraryView title="Games" types={['xbla', 'god']} />;
+      case 'library': return <LibraryView title="Library" types={['avatar_item', 'theme', 'dlc', 'gamerpic', 'xbla', 'god', 'demo', 'title_update']} />;
       case 'collections': return <CollectionsView />;
       case 'profiles': return <ProfileExplorer />;
       case 'staging': return <StagingArea />;

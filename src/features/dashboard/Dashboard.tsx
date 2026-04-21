@@ -84,6 +84,12 @@ export const Dashboard = () => {
     return [...items].sort((a, b) => b.size - a.size).slice(0, 5);
   }, [items]);
 
+  const recentItems = React.useMemo(() => {
+    return [...items]
+      .sort((a, b) => new Date(b.dateModified).getTime() - new Date(a.dateModified).getTime())
+      .slice(0, 5);
+  }, [items]);
+
   const COLORS = ['#107C10', '#0078D4', '#5C2D91', '#D83B01', '#FFB900', '#B4009E', '#00B7C3', '#E81123'];
 
   const avatarCount = items.filter(i => i.type === 'avatar_item').length;
@@ -366,8 +372,8 @@ export const Dashboard = () => {
                       <div className="absolute left-[11px] top-6 bottom-0 w-px bg-surface-border" />
                     )}
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                      log.type === 'error' ? 'bg-red-500/20 text-red-500' :
-                      log.type === 'success' ? 'bg-xbox-green/20 text-xbox-green' :
+                      log.level === 'error' ? 'bg-red-500/20 text-red-500' :
+                      log.level === 'success' ? 'bg-xbox-green/20 text-xbox-green' :
                       'bg-blue-500/20 text-blue-400'
                     }`}>
                       <div className="w-2 h-2 rounded-full bg-current" />
@@ -385,7 +391,7 @@ export const Dashboard = () => {
                 )}
               </div>
               <button 
-                onClick={() => window.location.hash = '#/activity'}
+                onClick={() => setActiveTab('activity')}
                 className="mt-6 w-full py-2 bg-surface-panel border border-surface-border rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-xbox-green hover:text-white transition-all"
               >
                 View All Logs
@@ -416,7 +422,7 @@ export const Dashboard = () => {
           <div className="bg-surface-card border border-surface-border rounded-2xl p-6">
             <h4 className="text-lg font-bold mb-4">Recent Items Found</h4>
             <div className="space-y-4">
-              {items.slice(0, 5).map((item) => (
+              {recentItems.map((item) => (
                 <div key={item.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-surface-panel transition-colors border border-transparent hover:border-surface-border">
                   <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 bg-surface-panel rounded-lg border border-surface-border flex items-center justify-center">
@@ -432,7 +438,7 @@ export const Dashboard = () => {
                   </span>
                 </div>
               ))}
-              {items.length === 0 && (
+              {recentItems.length === 0 && (
                 <div className="py-10 text-center text-gray-500 italic">No items scanned yet.</div>
               )}
             </div>

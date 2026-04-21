@@ -7,6 +7,7 @@ import { GameHub } from './GameHub';
 import { ContentPreviewer } from './ContentPreviewer';
 import { FilterSidebar } from './FilterSidebar';
 import { Modal } from '../../components/ui/Modal';
+import { buildInstalledContentKey } from '../../utils/contentPaths';
 
 interface LibraryViewProps {
   title: string;
@@ -83,8 +84,7 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
         else if (advancedFilters.dateRange === 'Last 90 Days') matchesDate = days <= 90;
       }
 
-      const heuristic = `${item.fileName}_${item.size}`;
-      const isInstalled = installedHeuristics.includes(heuristic);
+      const isInstalled = installedHeuristics.includes(buildInstalledContentKey(item));
       const matchesInstalledFilter = hideInstalled ? !isInstalled : true;
 
       return matchesType && matchesSearch && matchesFranchise && matchesInstalledFilter && 
@@ -101,7 +101,7 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
   }, [items, types, globalSearch, activeFranchise, hideInstalled, installedHeuristics, sortBy, advancedFilters]);
 
   const [isRenaming, setIsRenaming] = useState(false);
-  const [renameTemplate, setRenameTemplate] = useState('[GameName] ([TitleId])');
+  const [renameTemplate, setRenameTemplate] = useState('[GameName] ([TitleID])');
   const [renameOperations, setRenameOperations] = useState<any[]>([]);
   const [isPreviewingRename, setIsPreviewingRename] = useState(false);
 

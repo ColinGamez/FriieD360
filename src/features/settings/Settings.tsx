@@ -3,7 +3,7 @@ import { Folder, Plus, Trash2, HardDrive, RefreshCw, AlertTriangle, CheckCircle2
 import { useStore, ThemeID } from '../../store/useStore';
 
 export const Settings = () => {
-  const { settings, updateSettings, triggerScan, isScanning, fetchSettings, refreshInstalledStatus, theme, setTheme } = useStore();
+  const { settings, updateSettings, triggerScan, isScanning, fetchSettings, refreshInstalledStatus, theme, setTheme, items, collections } = useStore();
   const [newPath, setNewPath] = useState('');
   const [isPathValid, setIsPathValid] = useState<boolean | null>(null);
   const [installedPath, setInstalledPath] = useState('');
@@ -179,11 +179,11 @@ export const Settings = () => {
           </div>
           <div className="p-4 bg-surface-panel rounded-xl border border-surface-border">
             <p className="text-[9px] font-black uppercase text-gray-500 mb-1">Library Size</p>
-            <p className="text-sm font-bold">{useStore.getState().items.length} Items</p>
+            <p className="text-sm font-bold">{items.length} Items</p>
           </div>
           <div className="p-4 bg-surface-panel rounded-xl border border-surface-border">
             <p className="text-[9px] font-black uppercase text-gray-500 mb-1">Collections</p>
-            <p className="text-sm font-bold">{useStore.getState().collections.length} Groups</p>
+            <p className="text-sm font-bold">{collections.length} Groups</p>
           </div>
         </div>
       </section>

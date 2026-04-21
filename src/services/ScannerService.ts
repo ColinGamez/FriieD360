@@ -19,24 +19,28 @@ export class ScannerService {
 
   static async scanFolders(folders: string[], existingItems: any[], deep: boolean = false, autoRepair: boolean = false, customMappings: Record<string, string> = {}) {
     this.progress = { total: 0, current: 0, folder: '', isScanning: true };
-    
-    const cache = new Map(existingItems.map(i => [i.fullPath, i]));
-    const results: any[] = [];
 
-    // First pass: count all files to provide accurate progress
-    for (const folder of folders) {
-      if (!(await fs.pathExists(folder))) continue;
-      await this.countFiles(folder);
+    try {
+      const cache = new Map(existingItems.map(i => [i.fullPath, i]));
+      const results: any[] = [];
+
+      // First pass: count all files to provide accurate progress
+      for (const folder of folders) {
+        if (!(await fs.pathExists(folder))) continue;
+        await this.countFiles(folder);
+      }
+
+      // Second pass: walk and process
+      for (const folder of folders) {
+        if (!(await fs.pathExists(folder))) continue;
+        await this.walk(folder, cache, results, deep, autoRepair, customMappings);
+      }
+
+      return results;
+    } finally {
+      this.progress.isScanning = false;
+      this.progress.folder = '';
     }
-
-    // Second pass: walk and process
-    for (const folder of folders) {
-      if (!(await fs.pathExists(folder))) continue;
-      await this.walk(folder, cache, results, deep, autoRepair, customMappings);
-    }
-
-    this.progress.isScanning = false;
-    return results;
   }
 
   private static async countFiles(dir: string) {
