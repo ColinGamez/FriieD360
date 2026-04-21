@@ -40,10 +40,11 @@ interface AppState {
   addToStaging: (id: string) => void;
   removeFromStaging: (id: string) => void;
   clearStaging: () => void;
-  refreshInstalledStatus: (drivePath: string) => Promise<void>;
+  refreshInstalledStatus: (drivePath: string) => Promise<number>;
   updateMetadata: (itemId: string, metadata: any) => Promise<void>;
   bulkUpdateMetadata: (itemIds: string[], metadata: any) => Promise<void>;
   bulkDeleteItems: (itemIds: string[]) => Promise<void>;
+  clearLibrary: () => Promise<void>;
   runIntegrityCheck: () => Promise<{ removedCount: number }>;
   previewRename: (itemIds: string[], template: string) => Promise<any[]>;
   applyRename: (operations: any[]) => Promise<void>;
@@ -262,8 +263,10 @@ export const useStore = create<AppState>((set, get) => ({
       });
       const data = await res.json();
       set({ installedHeuristics: data });
+      return Array.isArray(data) ? data.length : 0;
     } catch (err) {
       console.error('Failed to refresh installed status', err);
+      return 0;
     }
   },
 
@@ -331,8 +334,23 @@ export const useStore = create<AppState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds })
       });
+      get().addToast(`Removed ${itemIds.length} ${itemIds.length === 1 ? 'item' : 'items'} from library`, 'success');
     } catch (err) {
       console.error('Failed to bulk delete items', err);
+      get().addToast('Failed to remove selected items', 'error');
+    }
+  },
+
+  clearLibrary: async () => {
+    try {
+      const res = await fetch('/api/library/clear', { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to clear library');
+      set({ items: [], stagedIds: [], installedHeuristics: [] });
+      await get().fetchCollections();
+      get().addToast('Library database cleared', 'success');
+    } catch (err) {
+      console.error('Failed to clear library', err);
+      get().addToast('Failed to clear library database', 'error');
     }
   },
 

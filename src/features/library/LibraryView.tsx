@@ -15,7 +15,7 @@ interface LibraryViewProps {
 }
 
 export const LibraryView = ({ title, types }: LibraryViewProps) => {
-  const { items, isScanning, fetchItems, triggerScan, installedHeuristics, addToStaging, bulkUpdateMetadata, bulkDeleteItems, globalSearch, fetchOnlineMetadata } = useStore();
+  const { items, isScanning, fetchItems, triggerScan, installedHeuristics, addToStaging, bulkUpdateMetadata, bulkDeleteItems, globalSearch, fetchOnlineMetadata, addToast } = useStore();
   const [activeFranchise, setActiveFranchise] = useState('All');
   const [hideInstalled, setHideInstalled] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'size'>('name');
@@ -397,7 +397,7 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
               const ids = filteredItems.map(i => i.id);
               if (ids.length === 0) return;
               const count = await fetchOnlineMetadata(ids);
-              alert(`Updated ${count} items with online metadata.`);
+              addToast(`Updated ${count} filtered items from online metadata`, 'success');
             }}
             className="p-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all text-gray-400 hover:text-white"
             title="Fetch Online Metadata for filtered items"
@@ -547,7 +547,7 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
               <button 
                 onClick={async () => {
                   const count = await fetchOnlineMetadata(selectedIds);
-                  alert(`Updated ${count} items with online metadata.`);
+                  addToast(`Updated ${count} selected items from online metadata`, 'success');
                   setSelectedIds([]);
                   setIsSelectionMode(false);
                 }}

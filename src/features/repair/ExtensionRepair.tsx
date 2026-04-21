@@ -6,7 +6,7 @@ import { AlertCircle, CheckCircle2, ArrowRight, Wrench, ShieldCheck, Loader2, Co
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 export const ExtensionRepair = () => {
-  const { items, triggerScan, bulkDeleteItems, runIntegrityCheck } = useStore();
+  const { items, triggerScan, bulkDeleteItems, runIntegrityCheck, addToast } = useStore();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [repairResults, setRepairResults] = useState<any[] | null>(null);
@@ -19,6 +19,8 @@ export const ExtensionRepair = () => {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showIntegrityModal, setShowIntegrityModal] = useState(false);
   const [showFixModal, setShowFixModal] = useState<string | null>(null);
+  const [showRenameConfirmModal, setShowRenameConfirmModal] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const { previewRename, applyRename, bulkUpdateMetadata, resolveDuplicates } = useStore();
 
@@ -102,6 +104,29 @@ export const ExtensionRepair = () => {
     await resolveDuplicates(strategy);
     setIsProcessing(false);
     setShowDuplicateModal(false);
+  };
+
+  const handleApplyRename = async () => {
+    if (!renamePreview) return;
+
+    try {
+      setIsProcessing(true);
+      await applyRename(renamePreview);
+      setRenamePreview(null);
+      setShowRenameConfirmModal(false);
+      addToast(`Renamed ${renamePreview.length} files`, 'success');
+    } catch (err) {
+      console.error('Batch rename failed', err);
+      addToast('Batch rename failed', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeleteHealthItem = async () => {
+    if (!confirmDeleteId) return;
+    await bulkDeleteItems([confirmDeleteId]);
+    setConfirmDeleteId(null);
   };
 
   return (
@@ -203,9 +228,14 @@ export const ExtensionRepair = () => {
                     <div className="text-right">
                       <p className="text-lg font-mono font-black text-xbox-green">{result.id}</p>
                       <button 
-                        onClick={() => {
-                          navigator.clipboard.writeText(result.id);
-                          alert('Title ID copied to clipboard!');
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(result.id);
+                            addToast(`Copied Title ID ${result.id}`, 'success');
+                          } catch (err) {
+                            console.error('Failed to copy Title ID', err);
+                            addToast('Unable to copy Title ID', 'error');
+                          }
                         }}
                         className="text-[10px] font-bold text-gray-500 hover:text-white uppercase tracking-widest flex items-center gap-1 ml-auto"
                       >
@@ -428,16 +458,7 @@ export const ExtensionRepair = () => {
                 Preview All
               </button>
               <button 
-                onClick={async () => {
-                  if (!renamePreview) return;
-                  if (confirm(`Apply rename to ${renamePreview.length} files? This will modify files on your disk.`)) {
-                    setIsProcessing(true);
-                    await applyRename(renamePreview);
-                    setRenamePreview(null);
-                    setIsProcessing(false);
-                    alert('Batch rename complete!');
-                  }
-                }}
+                onClick={() => setShowRenameConfirmModal(true)}
                 disabled={!renamePreview || isProcessing}
                 className="px-6 py-2 bg-xbox-green hover:bg-xbox-hover disabled:opacity-50 rounded-lg font-bold transition-all flex items-center space-x-2 shadow-lg shadow-xbox-green/20"
               >
@@ -813,9 +834,7 @@ export const ExtensionRepair = () => {
                             <Wrench size={14} />
                           </button>
                           <button 
-                            onClick={() => {
-                              if (confirm('Delete this item?')) bulkDeleteItems([item.id]);
-                            }}
+                            onClick={() => setConfirmDeleteId(item.id)}
                             className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all"
                             title="Delete Item"
                           >
@@ -985,6 +1004,63 @@ export const ExtensionRepair = () => {
               <ChevronRight size={16} className="text-gray-600 group-hover:text-xbox-green" />
             </button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showRenameConfirmModal}
+        onClose={() => setShowRenameConfirmModal(false)}
+        title="Apply Batch Rename"
+        type="warning"
+        footer={
+          <>
+            <button onClick={() => setShowRenameConfirmModal(false)} className="px-4 py-2 text-gray-400 hover:text-white font-bold">Cancel</button>
+            <button
+              onClick={handleApplyRename}
+              className="px-6 py-2 bg-xbox-green hover:bg-xbox-hover text-white rounded-xl font-bold shadow-lg shadow-xbox-green/20"
+            >
+              Rename Files
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-gray-300">
+            Apply the current rename preview to <b>{renamePreview?.length || 0}</b> files on disk.
+          </p>
+          <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex gap-3">
+            <AlertTriangle className="text-yellow-500 shrink-0" size={20} />
+            <p className="text-xs text-yellow-500/80 leading-relaxed">
+              This changes real filenames on disk. Review the preview list before continuing.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        title="Delete Library Item"
+        type="warning"
+        footer={
+          <>
+            <button onClick={() => setConfirmDeleteId(null)} className="px-4 py-2 text-gray-400 hover:text-white font-bold">Cancel</button>
+            <button
+              onClick={handleDeleteHealthItem}
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-lg shadow-red-600/20"
+            >
+              Remove Item
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-gray-300">
+            Remove <b>{items.find(i => i.id === confirmDeleteId)?.name || 'this item'}</b> from the FriieD360 library index.
+          </p>
+          <p className="text-xs text-yellow-500/80">
+            This does not delete the underlying file from your disk.
+          </p>
         </div>
       </Modal>
 
