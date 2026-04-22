@@ -10,7 +10,7 @@ interface GameHubProps {
 }
 
 export const GameHub = ({ titleId, onClose }: GameHubProps) => {
-  const { items, addToStaging, stagedIds, fetchOnlineMetadata } = useStore();
+  const { items, addToStaging, stagedIds, fetchOnlineMetadata, addToast } = useStore();
   const [isFetching, setIsFetching] = useState(false);
 
   const relatedItems = useMemo(() => {
@@ -48,7 +48,10 @@ export const GameHub = ({ titleId, onClose }: GameHubProps) => {
 
   const handleFetchOnline = async () => {
     setIsFetching(true);
-    await fetchOnlineMetadata(relatedItems.map(i => i.id));
+    const updated = await fetchOnlineMetadata(relatedItems.map(i => i.id));
+    if (updated > 0) {
+      addToast(`Refreshed metadata for ${updated} related items`, 'success');
+    }
     setIsFetching(false);
   };
 

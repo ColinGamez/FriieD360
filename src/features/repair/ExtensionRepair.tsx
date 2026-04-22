@@ -900,7 +900,6 @@ export const ExtensionRepair = () => {
                           });
                           setIsProcessing(false);
                           setShowFixModal(null);
-                          useStore.getState().addToast('Metadata updated successfully', 'success');
                         }}
                         className="w-full py-3 bg-xbox-green hover:bg-xbox-hover text-white rounded-xl font-bold transition-all shadow-lg shadow-xbox-green/20 flex items-center justify-center gap-2"
                       >
@@ -937,7 +936,6 @@ export const ExtensionRepair = () => {
                               });
                               setIsProcessing(false);
                               setShowFixModal(null);
-                              useStore.getState().addToast('Metadata updated successfully', 'success');
                             }}
                             className="w-full p-3 bg-surface-panel hover:bg-surface-border rounded-lg text-left flex justify-between items-center group transition-all"
                           >

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { ContentItem, AppSettings, Collection, ViewID, ScanProgress, AppTheme } from '../types';
 import { nanoid } from 'nanoid';
+import { getErrorMessage, readJsonOrThrow } from '../utils/api';
 
 export type ThemeID = AppTheme;
 
@@ -100,7 +101,7 @@ export const useStore = create<AppState>((set, get) => ({
   fetchItems: async () => {
     try {
       const res = await fetch('/api/library');
-      const data = await res.json();
+      const data = await readJsonOrThrow<ContentItem[]>(res, 'Failed to fetch library');
       set({ items: data });
     } catch (err) {
       console.error('Failed to fetch library', err);
@@ -111,7 +112,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({ isLoadingSettings: true });
     try {
       const res = await fetch('/api/settings');
-      const data = await res.json();
+      const data = await readJsonOrThrow<AppSettings>(res, 'Failed to fetch settings');
       const theme = (data.theme || 'carbon') as ThemeID;
       set({ settings: data, theme, isLoadingSettings: false });
     } catch (err) {
@@ -123,7 +124,7 @@ export const useStore = create<AppState>((set, get) => ({
   fetchCollections: async () => {
     try {
       const res = await fetch('/api/collections');
-      const data = await res.json();
+      const data = await readJsonOrThrow<Collection[]>(res, 'Failed to fetch collections');
       set({ collections: data });
     } catch (err) {
       console.error('Failed to fetch collections', err);
@@ -137,10 +138,11 @@ export const useStore = create<AppState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...get().settings, ...newSettings }),
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<AppSettings>(res, 'Failed to update settings');
       set({ settings: data, theme: (data.theme || get().theme) as ThemeID });
     } catch (err) {
       console.error('Failed to update settings', err);
+      get().addToast(getErrorMessage(err, 'Failed to update settings'), 'error');
     }
   },
 
@@ -192,19 +194,33 @@ export const useStore = create<AppState>((set, get) => ({
 
   toggleFavorite: async (itemId) => {
     const item = get().items.find(i => i.id === itemId);
-    const isNowFavorite = !item?.isFavorite;
+    if (!item) return;
+
+    const previousFavorite = item.isFavorite;
+    const isNowFavorite = !previousFavorite;
+
     set((state) => ({
       items: state.items.map(i => i.id === itemId ? { ...i, isFavorite: isNowFavorite } : i)
     }));
-    get().addToast(isNowFavorite ? 'Added to favorites' : 'Removed from favorites', 'success');
+
     try {
-      await fetch('/api/library/favorite', {
+      const res = await fetch('/api/library/favorite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemId })
       });
+      const data = await readJsonOrThrow<{ success: boolean; isFavorite: boolean }>(res, 'Failed to update favorites');
+      if (!data.success) {
+        throw new Error('Failed to update favorites');
+      }
+
+      get().addToast(isNowFavorite ? 'Added to favorites' : 'Removed from favorites', 'success');
     } catch (err) {
+      set((state) => ({
+        items: state.items.map(i => i.id === itemId ? { ...i, isFavorite: previousFavorite } : i)
+      }));
       console.error('Failed to toggle favorite', err);
+      get().addToast(getErrorMessage(err, 'Failed to update favorites'), 'error');
     }
   },
 
@@ -280,44 +296,66 @@ export const useStore = create<AppState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ drivePath })
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<string[]>(res, 'Failed to scan installed content');
       set({ installedHeuristics: data });
       return Array.isArray(data) ? data.length : 0;
     } catch (err) {
       console.error('Failed to refresh installed status', err);
+      get().addToast(getErrorMessage(err, 'Failed to scan installed content'), 'error');
       return 0;
     }
   },
 
   updateMetadata: async (itemId, metadata) => {
+    const previousMetadata = get().items.find(i => i.id === itemId)?.metadata;
+    if (!previousMetadata) return;
+
     set((state) => ({
       items: state.items.map(i => i.id === itemId ? { ...i, metadata: { ...i.metadata, ...metadata } } : i)
     }));
     try {
-      await fetch('/api/library/update-metadata', {
+      const res = await fetch('/api/library/update-metadata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemId, metadata })
       });
+      await readJsonOrThrow<{ success: boolean }>(res, 'Failed to update metadata');
     } catch (err) {
+      set((state) => ({
+        items: state.items.map(i => i.id === itemId ? { ...i, metadata: previousMetadata } : i)
+      }));
       console.error('Failed to update metadata', err);
+      get().addToast(getErrorMessage(err, 'Failed to update metadata'), 'error');
     }
   },
 
   bulkUpdateMetadata: async (itemIds, metadata) => {
+    const previousMetadata = new Map(
+      get().items
+        .filter((item) => itemIds.includes(item.id))
+        .map((item) => [item.id, item.metadata]),
+    );
+
     set((state) => ({
       items: state.items.map(i => itemIds.includes(i.id) ? { ...i, metadata: { ...i.metadata, ...metadata } } : i)
     }));
     try {
-      await fetch('/api/library/bulk-update-metadata', {
+      const res = await fetch('/api/library/bulk-update-metadata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds, metadata })
       });
+      await readJsonOrThrow<{ success: boolean; count: number }>(res, 'Failed to update items');
       get().addToast(`Updated ${itemIds.length} items`, 'success');
     } catch (err) {
+      set((state) => ({
+        items: state.items.map((item) => {
+          const snapshot = previousMetadata.get(item.id);
+          return snapshot ? { ...item, metadata: snapshot } : item;
+        })
+      }));
       console.error('Failed to bulk update metadata', err);
-      get().addToast('Failed to update items', 'error');
+      get().addToast(getErrorMessage(err, 'Failed to update items'), 'error');
     }
   },
 
@@ -328,7 +366,7 @@ export const useStore = create<AppState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds })
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<ContentItem[]>(res, 'Auto-fix failed');
       set((state) => ({
         items: state.items.map(i => {
           const fixed = data.find((f: any) => f.id === i.id);
@@ -338,25 +376,30 @@ export const useStore = create<AppState>((set, get) => ({
       get().addToast(`Auto-fixed ${data.length} items`, 'success');
     } catch (err) {
       console.error('Failed to auto-fix metadata', err);
-      get().addToast('Auto-fix failed', 'error');
+      get().addToast(getErrorMessage(err, 'Auto-fix failed'), 'error');
     }
   },
 
   bulkDeleteItems: async (itemIds) => {
+    const previousItems = get().items;
+    const previousStagedIds = get().stagedIds;
+
     set((state) => ({
       items: state.items.filter(i => !itemIds.includes(i.id)),
       stagedIds: state.stagedIds.filter(id => !itemIds.includes(id))
     }));
     try {
-      await fetch('/api/library/bulk-delete', {
+      const res = await fetch('/api/library/bulk-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds })
       });
+      await readJsonOrThrow<{ success: boolean; count: number }>(res, 'Failed to remove selected items');
       get().addToast(`Removed ${itemIds.length} ${itemIds.length === 1 ? 'item' : 'items'} from library`, 'success');
     } catch (err) {
+      set({ items: previousItems, stagedIds: previousStagedIds });
       console.error('Failed to bulk delete items', err);
-      get().addToast('Failed to remove selected items', 'error');
+      get().addToast(getErrorMessage(err, 'Failed to remove selected items'), 'error');
     }
   },
 
@@ -414,13 +457,14 @@ export const useStore = create<AppState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds })
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<{ success: boolean; updatedCount: number }>(res, 'Failed to refresh title metadata');
       if (data.success && data.updatedCount > 0) {
         await get().fetchItems();
       }
       return data.updatedCount;
     } catch (err) {
       console.error('Failed to refresh title metadata', err);
+      get().addToast(getErrorMessage(err, 'Failed to refresh title metadata'), 'error');
       return 0;
     }
   },
@@ -432,7 +476,7 @@ export const useStore = create<AppState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ strategy })
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<{ success: boolean; removedCount: number }>(res, 'Failed to resolve duplicates');
       if (data.success) {
         await get().fetchItems();
         get().addToast(`Resolved ${data.removedCount} duplicates`, 'success');
@@ -441,6 +485,7 @@ export const useStore = create<AppState>((set, get) => ({
       return 0;
     } catch (err) {
       console.error('Failed to resolve duplicates', err);
+      get().addToast(getErrorMessage(err, 'Failed to resolve duplicates'), 'error');
       return 0;
     }
   },
@@ -452,14 +497,14 @@ export const useStore = create<AppState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds })
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<{ success: boolean }>(res, 'Organization failed');
       if (data.success) {
         await get().fetchItems();
         get().addToast('Library organized successfully', 'success');
       }
     } catch (err) {
       console.error('Failed to organize library', err);
-      get().addToast('Organization failed', 'error');
+      get().addToast(getErrorMessage(err, 'Organization failed'), 'error');
     }
   }
 }));

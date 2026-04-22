@@ -365,12 +365,16 @@ async function startServer() {
     const result = await mutateDb((db) => {
       const item = db.items.find((entry: any) => entry.id === itemId);
       if (!item) {
-        return { success: false, isFavorite: false };
+        return { success: false, isFavorite: false, error: 'Item not found' };
       }
 
       item.isFavorite = !item.isFavorite;
       return { success: true, isFavorite: item.isFavorite };
     });
+
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
 
     res.json(result);
   });

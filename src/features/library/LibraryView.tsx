@@ -104,6 +104,7 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
   const [renameTemplate, setRenameTemplate] = useState('[GameName] ([TitleID])');
   const [renameOperations, setRenameOperations] = useState<any[]>([]);
   const [isPreviewingRename, setIsPreviewingRename] = useState(false);
+  const densityOptions: Array<'compact' | 'normal' | 'large'> = ['compact', 'normal', 'large'];
 
   const handlePreviewRename = async () => {
     if (selectedIds.length === 0) return;
@@ -168,7 +169,9 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
     if (selectedIds.length === 0) return;
     setIsFetchingOnline(true);
     const updated = await fetchOnlineMetadata(selectedIds);
-    useStore.getState().addToast(`Refreshed metadata for ${updated} selected items`, 'success');
+    if (updated > 0) {
+      addToast(`Refreshed metadata for ${updated} selected items`, 'success');
+    }
     setIsFetchingOnline(false);
     setSelectedIds([]);
     setIsSelectionMode(false);
@@ -397,7 +400,9 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
               const ids = filteredItems.map(i => i.id);
               if (ids.length === 0) return;
               const count = await fetchOnlineMetadata(ids);
-              addToast(`Refreshed metadata for ${count} filtered items`, 'success');
+              if (count > 0) {
+                addToast(`Refreshed metadata for ${count} filtered items`, 'success');
+              }
             }}
             className="p-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all text-gray-400 hover:text-white"
             title="Refresh title metadata for filtered items"
@@ -452,10 +457,10 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
           {viewMode === 'grid' && (
             <div className="flex items-center gap-2">
               <div className="flex bg-surface-card border border-surface-border rounded-lg p-1">
-                {['compact', 'normal', 'large'].map((d) => (
+                {densityOptions.map((d) => (
                   <button
                     key={d}
-                    onClick={() => setGridDensity(d as any)}
+                    onClick={() => setGridDensity(d)}
                     className={`px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded transition-all ${
                       gridDensity === d ? 'bg-xbox-green text-white' : 'text-gray-500 hover:text-gray-300'
                     }`}
@@ -547,7 +552,9 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
               <button 
                 onClick={async () => {
                   const count = await fetchOnlineMetadata(selectedIds);
-                  addToast(`Refreshed metadata for ${count} selected items`, 'success');
+                  if (count > 0) {
+                    addToast(`Refreshed metadata for ${count} selected items`, 'success');
+                  }
                   setSelectedIds([]);
                   setIsSelectionMode(false);
                 }}

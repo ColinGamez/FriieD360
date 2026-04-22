@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { History, Info, AlertCircle, CheckCircle2, Trash2, Download } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { useStore } from '../../store/useStore';
+import { ActivityLog as ActivityLogEntry } from '../../types';
+import { getErrorMessage, readJsonOrThrow } from '../../utils/api';
 
 export const ActivityLog = () => {
   const { addToast } = useStore();
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
   const [showClearModal, setShowClearModal] = useState(false);
@@ -15,14 +17,14 @@ export const ActivityLog = () => {
   const fetchLogs = () => {
     setIsLoading(true);
     fetch('/api/logs')
-      .then(res => res.json())
+      .then(res => readJsonOrThrow<ActivityLogEntry[]>(res, 'Failed to load activity history'))
       .then(data => {
-        setLogs(data.reverse()); // Show newest first
+        setLogs([...data].reverse());
         setIsLoading(false);
       })
       .catch(err => {
         console.error('Failed to fetch logs', err);
-        addToast('Failed to load activity history', 'error');
+        addToast(getErrorMessage(err, 'Failed to load activity history'), 'error');
         setIsLoading(false);
       });
   };
@@ -34,13 +36,13 @@ export const ActivityLog = () => {
   const clearLogs = async () => {
     try {
       const res = await fetch('/api/logs/clear', { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to clear logs');
+      await readJsonOrThrow<{ success: boolean }>(res, 'Failed to clear logs');
       setLogs([]);
       setShowClearModal(false);
       addToast('Activity history cleared', 'success');
     } catch (err) {
       console.error('Failed to clear logs', err);
-      addToast('Failed to clear activity history', 'error');
+      addToast(getErrorMessage(err, 'Failed to clear activity history'), 'error');
     }
   };
 
@@ -67,7 +69,7 @@ export const ActivityLog = () => {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex bg-surface-card border border-surface-border rounded-lg p-1">
-            {['all', 'info', 'success', 'error'].map(f => (
+            {['all', 'info', 'success', 'warn', 'error'].map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -113,11 +115,19 @@ export const ActivityLog = () => {
               <div className="flex-1">
                 <p className="text-sm font-medium">{log.message}</p>
                 <p className="text-[10px] text-gray-500 mt-1">{new Date(log.timestamp).toLocaleString()}</p>
+                {log.details && (
+                  <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">{log.details}</p>
+                )}
               </div>
             </div>
           ))}
-          {logs.length === 0 && !isLoading && (
+          {filteredLogs.length === 0 && !isLoading && logs.length === 0 && (
             <div className="py-20 text-center text-gray-500 italic">No activity recorded yet.</div>
+          )}
+          {filteredLogs.length === 0 && !isLoading && logs.length > 0 && (
+            <div className="py-20 text-center text-gray-500 italic">
+              No {filter === 'all' ? 'activity entries' : `${filter} entries`} match the current filter.
+            </div>
           )}
           {isLoading && (
             <div className="py-20 text-center text-gray-500 italic">Loading history...</div>
