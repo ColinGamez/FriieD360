@@ -146,28 +146,47 @@ export const useStore = create<AppState>((set, get) => ({
 
   triggerScan: async (deep = false) => {
     set({ isScanning: true });
+    let poll: ReturnType<typeof setInterval> | null = null;
+
     try {
       const res = await fetch('/api/scanner/scan', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deep })
       });
-      if (!res.ok) throw new Error('Scan failed');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.error || 'Scan failed');
+      }
       
       // Start polling for progress
-      const poll = setInterval(async () => {
-        const pRes = await fetch('/api/scanner/progress');
-        const pData = await pRes.json();
-        set({ scanProgress: pData });
-        if (!pData.isScanning) {
-          clearInterval(poll);
-          get().fetchItems();
+      poll = setInterval(async () => {
+        try {
+          const pRes = await fetch('/api/scanner/progress');
+          if (!pRes.ok) {
+            throw new Error('Unable to read scan progress');
+          }
+
+          const pData = await pRes.json();
+          set({ scanProgress: pData });
+          if (!pData.isScanning) {
+            if (poll) clearInterval(poll);
+            await get().fetchItems();
+            set({ isScanning: false });
+          }
+        } catch (progressError) {
+          if (poll) clearInterval(poll);
+          console.error('Failed to poll scan progress', progressError);
           set({ isScanning: false });
+          get().addToast('Scan progress monitoring failed. Refreshing library state.', 'error');
+          void get().fetchItems();
         }
       }, 500);
     } catch (err) {
+      if (poll) clearInterval(poll);
       console.error('Scan failed', err);
       set({ isScanning: false });
+      get().addToast(err instanceof Error ? err.message : 'Scan failed', 'error');
     }
   },
 

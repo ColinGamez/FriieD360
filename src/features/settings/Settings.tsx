@@ -14,6 +14,14 @@ export const Settings = () => {
   const [profileName, setProfileName] = useState('');
   const [outputFolderDraft, setOutputFolderDraft] = useState(settings.outputFolder);
   const [showClearLibraryModal, setShowClearLibraryModal] = useState(false);
+  const availableProfileIds = Array.from(new Set([
+    '0000000000000000',
+    settings.profileId || '0000000000000000',
+    ...Object.keys(settings.profileMappings || {}),
+    ...items
+      .map((item) => item.metadata.technical?.profileId)
+      .filter((id): id is string => Boolean(id) && id !== '0000000000000000'),
+  ])).filter(Boolean);
 
   useEffect(() => { fetchSettings(); }, []);
   useEffect(() => { setOutputFolderDraft(settings.outputFolder); }, [settings.outputFolder]);
@@ -271,6 +279,26 @@ export const Settings = () => {
             >
               Save
             </button>
+          </div>
+
+          <div className="mt-6 p-4 bg-surface-panel rounded-xl border border-surface-border space-y-3">
+            <div>
+              <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Default Content Owner</p>
+              <p className="text-xs text-gray-500 mt-1">Used by quick stage copy and one-click USB export for profile-scoped content.</p>
+            </div>
+            <select
+              value={settings.profileId || '0000000000000000'}
+              onChange={(e) => updateSettings({ profileId: e.target.value })}
+              className="w-full bg-surface-back border border-surface-border rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-xbox-green text-sm font-mono"
+            >
+              {availableProfileIds.map((id) => (
+                <option key={id} value={id}>
+                  {id === '0000000000000000'
+                    ? 'Global / All Profiles'
+                    : `${settings.profileMappings?.[id] || 'Xbox Profile'} (${id})`}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </section>

@@ -1,14 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../store/useStore';
-import { Usb, HardDrive, ArrowRight, Play, CheckCircle2, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Usb, HardDrive, ArrowRight, Play, CheckCircle2, AlertCircle, Loader2, RefreshCw, User } from 'lucide-react';
 
 export const UsbExport = () => {
-  const { stagedIds, items, clearStaging, settings, addToast } = useStore();
+  const { stagedIds, items, clearStaging, settings, addToast, updateSettings } = useStore();
   const [drives, setDrives] = useState<any[]>([]);
   const [selectedDrive, setSelectedDrive] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [summary, setSummary] = useState<any>(null);
+  const [selectedProfileId, setSelectedProfileId] = useState(settings.profileId || '0000000000000000');
+  const availableProfileIds = Array.from(new Set([
+    '0000000000000000',
+    settings.profileId || '0000000000000000',
+    ...Object.keys(settings.profileMappings || {}),
+    ...items
+      .map((item) => item.metadata.technical?.profileId)
+      .filter((id): id is string => Boolean(id) && id !== '0000000000000000'),
+  ])).filter(Boolean);
 
   const fetchDrives = async () => {
     setIsRefreshing(true);
@@ -28,6 +37,10 @@ export const UsbExport = () => {
   useEffect(() => {
     fetchDrives();
   }, []);
+
+  useEffect(() => {
+    setSelectedProfileId(settings.profileId || '0000000000000000');
+  }, [settings.profileId]);
 
   const formatSize = (bytes: number) => {
     if (!bytes) return '0 B';
@@ -49,10 +62,14 @@ export const UsbExport = () => {
     setIsExporting(true);
     
     try {
+      if ((settings.profileId || '0000000000000000') !== selectedProfileId) {
+        await updateSettings({ profileId: selectedProfileId });
+      }
+
       const res = await fetch('/api/export/usb', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemIds: stagedIds, usbPath: selectedDrive, targetProfileId: settings.profileId })
+        body: JSON.stringify({ itemIds: stagedIds, usbPath: selectedDrive, targetProfileId: selectedProfileId })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -137,6 +154,29 @@ export const UsbExport = () => {
                       </div>
                     )}
                 </div>
+
+                <div className="p-4 bg-surface-card border border-surface-border rounded-xl space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-bold">
+                      <User size={16} className="text-xbox-green" />
+                      <span>Content Owner</span>
+                    </div>
+                    <select
+                      value={selectedProfileId}
+                      onChange={(e) => setSelectedProfileId(e.target.value)}
+                      className="w-full bg-surface-panel border border-surface-border rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-xbox-green"
+                    >
+                      {availableProfileIds.map((id) => (
+                        <option key={id} value={id}>
+                          {id === '0000000000000000'
+                            ? 'Global / All Profiles'
+                            : `${settings.profileMappings?.[id] || 'Xbox Profile'} (${id})`}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-500">
+                      Themes, gamerpics, and avatar items will use this owner folder during export.
+                    </p>
+                </div>
             </section>
 
             <section className="bg-surface-card border border-surface-border rounded-3xl p-6 flex flex-col">
@@ -145,7 +185,7 @@ export const UsbExport = () => {
                     <div className="flex justify-between text-sm"><span className="text-gray-500">Items to Copy:</span><span className="font-bold">{stagedIds.length}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-gray-500">Total Size:</span><span className="font-bold">{formatSize(totalStagedSize)}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-gray-500">Destination:</span><span className="font-mono text-xbox-green truncate max-w-[150px]">{selectedDrive || 'Not Selected'}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Content Owner:</span><span className="font-mono text-white truncate max-w-[150px]">{settings.profileId || '0000000000000000'}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Content Owner:</span><span className="font-mono text-white truncate max-w-[150px]">{selectedProfileId}</span></div>
                     
                     {!hasEnoughSpace && (
                       <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-500 text-xs">
@@ -157,7 +197,7 @@ export const UsbExport = () => {
                     <div className="pt-4 mt-4 border-t border-surface-border">
                         <p className="text-[10px] text-gray-500 uppercase font-black leading-relaxed">
                             Structure: <br/>
-                            <span className="text-gray-300 font-mono">/Content/{settings.profileId || '0000000000000000'}/...</span>
+                            <span className="text-gray-300 font-mono">/Content/{selectedProfileId}/...</span>
                         </p>
                     </div>
                 </div>
