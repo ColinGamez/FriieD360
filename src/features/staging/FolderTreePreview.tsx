@@ -1,5 +1,6 @@
 import React from 'react';
 import { Folder, File, ChevronRight, ChevronDown } from 'lucide-react';
+import { ContentItem } from '../../types';
 import { buildContentRelativePath } from '../../utils/contentPaths';
 
 interface TreeNode {
@@ -9,12 +10,12 @@ interface TreeNode {
   size?: number;
 }
 
-export const FolderTreePreview = ({ items }: { items: any[] }) => {
+export const FolderTreePreview = ({ items, contentOwnerId }: { items: ContentItem[]; contentOwnerId?: string }) => {
   const tree = React.useMemo(() => {
     const root: TreeNode = { name: 'Root', type: 'folder', children: {} };
 
     items.forEach(item => {
-      const pathParts = buildContentRelativePath(item).split('/').slice(0, -1);
+      const pathParts = buildContentRelativePath(item, { contentOwnerId }).split('/').slice(0, -1);
       let current = root;
 
       pathParts.forEach(part => {
@@ -28,7 +29,7 @@ export const FolderTreePreview = ({ items }: { items: any[] }) => {
     });
 
     return root;
-  }, [items]);
+  }, [contentOwnerId, items]);
 
   return (
     <div className="bg-surface-panel border border-surface-border rounded-xl p-4 font-mono text-xs overflow-x-auto">

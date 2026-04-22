@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { ContentItem } from '../types';
 import { buildContentRelativePath } from '../utils/contentPaths';
 
 export interface StagingOp {
@@ -11,9 +12,13 @@ export interface StagingOp {
 }
 
 export class StagingService {
-  static async prepareOperations(items: any[], outputBase: string): Promise<StagingOp[]> {
+  static async prepareOperations(
+    items: ContentItem[],
+    outputBase: string,
+    options: { contentOwnerId?: string } = {},
+  ): Promise<StagingOp[]> {
     return items.map(item => {
-      const relativePath = buildContentRelativePath(item).split('/');
+      const relativePath = buildContentRelativePath(item, options).split('/');
       const dest = path.join(outputBase, ...relativePath);
 
       return {

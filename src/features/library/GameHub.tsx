@@ -96,7 +96,7 @@ export const GameHub = ({ titleId, onClose }: GameHubProps) => {
                 className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
               >
                 {isFetching ? <RefreshCw size={20} className="animate-spin" /> : <Globe size={20} />}
-                <span>Fetch Metadata</span>
+                <span>Refresh Metadata</span>
               </button>
               <button 
                 onClick={handleStageAll}

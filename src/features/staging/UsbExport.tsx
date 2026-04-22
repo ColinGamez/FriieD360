@@ -3,7 +3,7 @@ import { useStore } from '../../store/useStore';
 import { Usb, HardDrive, ArrowRight, Play, CheckCircle2, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 
 export const UsbExport = () => {
-  const { stagedIds, items, clearStaging } = useStore();
+  const { stagedIds, items, clearStaging, settings, addToast } = useStore();
   const [drives, setDrives] = useState<any[]>([]);
   const [selectedDrive, setSelectedDrive] = useState('');
   const [isExporting, setIsExporting] = useState(false);
@@ -18,6 +18,7 @@ export const UsbExport = () => {
       setDrives(data);
     } catch (err) {
       console.error('Failed to fetch drives', err);
+      addToast('Failed to refresh drive list', 'error');
     } finally {
       setIsRefreshing(false);
     }
@@ -57,6 +58,7 @@ export const UsbExport = () => {
       if (data.success > 0) clearStaging();
     } catch (err) {
       console.error("Export failed", err);
+      addToast('USB export failed', 'error');
     } finally {
       setIsExporting(false);
     }
@@ -144,7 +146,7 @@ export const UsbExport = () => {
                     <div className="pt-4 mt-4 border-t border-surface-border">
                         <p className="text-[10px] text-gray-500 uppercase font-black leading-relaxed">
                             Structure: <br/>
-                            <span className="text-gray-300 font-mono">/Content/0000000000000000/...</span>
+                            <span className="text-gray-300 font-mono">/Content/{settings.profileId || '0000000000000000'}/...</span>
                         </p>
                     </div>
                 </div>

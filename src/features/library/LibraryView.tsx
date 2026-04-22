@@ -168,7 +168,7 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
     if (selectedIds.length === 0) return;
     setIsFetchingOnline(true);
     const updated = await fetchOnlineMetadata(selectedIds);
-    useStore.getState().addToast(`Successfully updated ${updated} items from online database`, 'success');
+    useStore.getState().addToast(`Refreshed metadata for ${updated} selected items`, 'success');
     setIsFetchingOnline(false);
     setSelectedIds([]);
     setIsSelectionMode(false);
@@ -365,10 +365,10 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
               onClick={handleFetchOnline}
               disabled={selectedIds.length === 0 || isFetchingOnline}
               className="flex items-center space-x-2 px-4 py-2 bg-blue-500/10 border border-blue-500/50 text-blue-400 rounded-lg hover:bg-blue-500/20 transition-all disabled:opacity-50 text-sm font-bold"
-              title="Fetch metadata from Xbox Unity"
+              title="Refresh title metadata for selected items"
             >
               {isFetchingOnline ? <RefreshCw size={18} className="animate-spin" /> : <Globe size={18} />}
-              <span>Fetch Online</span>
+              <span>Refresh Metadata</span>
             </button>
           )}
 
@@ -397,10 +397,10 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
               const ids = filteredItems.map(i => i.id);
               if (ids.length === 0) return;
               const count = await fetchOnlineMetadata(ids);
-              addToast(`Updated ${count} filtered items from online metadata`, 'success');
+              addToast(`Refreshed metadata for ${count} filtered items`, 'success');
             }}
             className="p-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all text-gray-400 hover:text-white"
-            title="Fetch Online Metadata for filtered items"
+            title="Refresh title metadata for filtered items"
           >
             <Globe size={18} />
           </button>
@@ -547,14 +547,14 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
               <button 
                 onClick={async () => {
                   const count = await fetchOnlineMetadata(selectedIds);
-                  addToast(`Updated ${count} selected items from online metadata`, 'success');
+                  addToast(`Refreshed metadata for ${count} selected items`, 'success');
                   setSelectedIds([]);
                   setIsSelectionMode(false);
                 }}
                 className="flex items-center space-x-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all text-sm font-bold border border-white/20"
               >
                 <Globe size={18} />
-                <span>Fetch Online</span>
+                <span>Refresh Metadata</span>
               </button>
               <button 
                 onClick={() => setIsRenaming(true)}

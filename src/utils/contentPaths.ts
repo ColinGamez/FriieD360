@@ -17,6 +17,12 @@ export const DEFAULT_TITLE_IDS: Partial<Record<ContentType, string>> = {
   gamerpic: 'FFFE07D1',
 };
 
+const PROFILE_SCOPED_TYPES = new Set<ContentType>([
+  'avatar_item',
+  'theme',
+  'gamerpic',
+]);
+
 const RESERVED_CONTENT_IDS = new Set([
   '00000000',
   '00000002',
@@ -35,6 +41,12 @@ export function isLikelyTitleId(value?: string | null): boolean {
   return /^[0-9A-F]{8}$/.test(normalized) && !RESERVED_CONTENT_IDS.has(normalized);
 }
 
+export function isLikelyProfileId(value?: string | null): boolean {
+  if (!value) return false;
+  const normalized = value.toUpperCase();
+  return /^[0-9A-F]{16}$/.test(normalized) && normalized !== '0000000000000000';
+}
+
 export function resolveTitleId(titleId: string | undefined, type: ContentType): string {
   if (isLikelyTitleId(titleId)) {
     return titleId!.toUpperCase();
@@ -43,10 +55,31 @@ export function resolveTitleId(titleId: string | undefined, type: ContentType): 
   return DEFAULT_TITLE_IDS[type] || '00000000';
 }
 
-export function buildContentRelativePath(item: Pick<ContentItem, 'type' | 'fileName' | 'metadata'>): string {
+export function resolveContentOwnerId(
+  item: Pick<ContentItem, 'type' | 'metadata'>,
+  preferredProfileId?: string,
+): string {
+  if (PROFILE_SCOPED_TYPES.has(item.type)) {
+    if (isLikelyProfileId(preferredProfileId)) {
+      return preferredProfileId!.toUpperCase();
+    }
+
+    if (isLikelyProfileId(item.metadata?.technical?.profileId)) {
+      return item.metadata.technical!.profileId.toUpperCase();
+    }
+  }
+
+  return '0000000000000000';
+}
+
+export function buildContentRelativePath(
+  item: Pick<ContentItem, 'type' | 'fileName' | 'metadata'>,
+  options: { contentOwnerId?: string } = {},
+): string {
   const titleId = resolveTitleId(item.metadata?.titleId, item.type);
   const typeFolder = CONTENT_TYPE_FOLDER_MAP[item.type] || '00000001';
-  return ['Content', '0000000000000000', titleId, typeFolder, item.fileName].join('/');
+  const contentOwnerId = resolveContentOwnerId(item, options.contentOwnerId);
+  return ['Content', contentOwnerId, titleId, typeFolder, item.fileName].join('/');
 }
 
 export function buildInstalledContentKey(item: Pick<ContentItem, 'type' | 'fileName' | 'size' | 'metadata'>): string {

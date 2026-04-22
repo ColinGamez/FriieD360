@@ -179,6 +179,14 @@ async function startServer() {
 
   app.use(express.json());
 
+  app.get('/api/cover-art/:titleId', (req, res) => {
+    const titleId = String(req.params.titleId || '');
+    const name = typeof req.query.name === 'string' ? req.query.name : undefined;
+    const franchise = typeof req.query.franchise === 'string' ? req.query.franchise : undefined;
+    const svg = MetadataService.renderCoverArtSvg(titleId, name, franchise);
+    res.type('image/svg+xml').send(svg);
+  });
+
   app.get('/api/library', async (req, res) => {
     const db = await getDb();
     res.json(db.items);
@@ -290,20 +298,23 @@ async function startServer() {
 
   app.post('/api/staging/copy', async (req, res) => {
     const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
+    const targetProfileId = typeof req.body?.targetProfileId === 'string'
+      ? req.body.targetProfileId
+      : undefined;
     const db = await getDb();
     if (!db.settings.outputFolder) {
       return res.status(400).json({ error: 'Output folder not configured' });
     }
 
     const itemsToStage = db.items.filter((item: any) => itemIds.includes(item.id));
-    const ops = await StagingService.prepareOperations(itemsToStage, db.settings.outputFolder);
+    const ops = await StagingService.prepareOperations(itemsToStage, db.settings.outputFolder, { contentOwnerId: targetProfileId });
     const results = await StagingService.execute(ops);
 
     await mutateDb((nextDb) => {
       addLog(
         nextDb,
         'info',
-        `Staged ${results.filter((result) => result.status === 'success').length} items.`,
+        `Staged ${results.filter((result) => result.status === 'success').length} items${targetProfileId && targetProfileId !== '0000000000000000' ? ` for profile ${targetProfileId}` : ''}.`,
       );
     });
 
@@ -429,7 +440,7 @@ async function startServer() {
       });
 
       if (updated > 0) {
-        addLog(nextDb, 'success', `Successfully fetched online metadata for ${updated} items.`);
+        addLog(nextDb, 'success', `Refreshed title metadata for ${updated} items.`);
       }
 
       return updated;

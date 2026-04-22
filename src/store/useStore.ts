@@ -401,7 +401,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
       return data.updatedCount;
     } catch (err) {
-      console.error('Failed to fetch online metadata', err);
+      console.error('Failed to refresh title metadata', err);
       return 0;
     }
   },
