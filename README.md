@@ -15,7 +15,7 @@ FriieD360 Studio is a local-first Xbox 360 content manager for scanning, organiz
 
 - Recursive local scanning with optional startup scans
 - Extension repair for extensionless `.CON` content
-- Metadata lookup, custom Title ID mappings, and profile mappings
+- Metadata lookup, custom Title ID mappings, shared title catalog coverage, and profile mappings
 - Installed-content detection against Xbox HDD or USB roots
 - Smart collections and custom collections
 - Batch rename, duplicate cleanup, integrity checks, and library organization
@@ -58,6 +58,17 @@ FriieD360 Studio is a local-first Xbox 360 content manager for scanning, organiz
   Removes the `dist/` folder.
 - `npm run lint`
   Runs TypeScript type-checking with `tsc --noEmit`.
+- `npm run update:title-db`
+  Refreshes the built-in Xbox 360 title catalog from the configured community source lists.
+
+## Title Database
+
+- FriieD360 ships with a generated Xbox 360 title catalog used by scanning, metadata lookup, and the Title ID search tools.
+- Run `npm run update:title-db` to regenerate `src/data/titleCatalog.generated.ts` from the built-in source list pipeline.
+- You can add your own supplemental title sources by creating a local `title-sources.local/` folder at the repo root.
+- Supported supplemental formats are `.json`, `.csv`, and `.txt`.
+- Local supplemental files are merged on top of the remote sources when `npm run update:title-db` runs.
+- `title-sources.local/` is ignored by git so you can keep private or experimental mappings there.
 
 ## Typical Workflow
 

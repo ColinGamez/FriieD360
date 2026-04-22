@@ -5,6 +5,7 @@ export interface TitleInfo {
   name: string;
   franchise: string;
   releaseYear?: number;
+  aliases?: string[];
 }
 
 const TITLE_OVERRIDES: Record<string, Omit<TitleInfo, 'id'>> = {
@@ -157,13 +158,15 @@ for (const entry of XBOX_360_TITLE_DB_RAW) {
   const id = entry.id.toUpperCase();
   const override = TITLE_OVERRIDES[id];
   const name = normalizeTitleName(override?.name || entry.name);
-  const franchise = override?.franchise || deriveFranchise(name);
+  const franchise = override?.franchise || entry.franchise || deriveFranchise(name);
+  const aliases = (entry.aliases || []).map(normalizeTitleName).filter((alias) => alias && alias !== name);
 
   titleCatalogMap.set(id, {
     id,
     name,
     franchise: franchise || 'Xbox 360',
-    releaseYear: override?.releaseYear,
+    releaseYear: override?.releaseYear || entry.releaseYear,
+    ...(aliases.length > 0 ? { aliases } : {}),
   });
 }
 
@@ -201,7 +204,8 @@ export function searchTitleCatalog(query: string) {
     return (
       entry.id.toLowerCase().includes(trimmedQuery) ||
       entry.name.toLowerCase().includes(trimmedQuery) ||
-      entry.franchise.toLowerCase().includes(trimmedQuery)
+      entry.franchise.toLowerCase().includes(trimmedQuery) ||
+      (entry.aliases || []).some((alias) => alias.toLowerCase().includes(trimmedQuery))
     );
   });
 }
