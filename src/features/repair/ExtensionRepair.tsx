@@ -248,7 +248,9 @@ export const ExtensionRepair = () => {
                       </div>
                       <div>
                         <h4 className="font-bold text-white">{result.name}</h4>
-                        <p className="text-xs text-gray-500">{result.franchise} • {result.releaseYear}</p>
+                        <p className="text-xs text-gray-500">
+                          {[result.franchise, result.releaseYear].filter(Boolean).join(' • ') || 'Xbox 360 Title ID'}
+                        </p>
                       </div>
                     </div>
                     <div className="text-right">

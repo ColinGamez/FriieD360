@@ -1,144 +1,17 @@
-export interface TitleInfo {
-  id: string;
-  name: string;
-  franchise: string;
-  releaseYear?: number;
-}
+import { getTitleCatalog, getTitleInfo, searchTitleCatalog } from '../data/titleCatalog';
+
+export type { TitleInfo } from '../data/titleCatalog';
 
 export class TitleIdService {
-  private static DATABASE: TitleInfo[] = [
-    { id: '584111F7', name: 'Forza Horizon 2', franchise: 'Forza', releaseYear: 2014 },
-    { id: '4D53084D', name: 'Forza Motorsport 3', franchise: 'Forza', releaseYear: 2009 },
-    { id: '4D530917', name: 'Forza Motorsport 4', franchise: 'Forza', releaseYear: 2011 },
-    { id: '4D5307E1', name: 'Gears of War', franchise: 'Gears of War', releaseYear: 2006 },
-    { id: '4D53082D', name: 'Gears of War 2', franchise: 'Gears of War', releaseYear: 2008 },
-    { id: '4D5308AB', name: 'Gears of War 3', franchise: 'Gears of War', releaseYear: 2011 },
-    { id: '4D530A26', name: 'Gears of War: Judgment', franchise: 'Gears of War', releaseYear: 2013 },
-    { id: '4D5307E6', name: 'Halo 3', franchise: 'Halo', releaseYear: 2007 },
-    { id: '4D53085B', name: 'Halo: Reach', franchise: 'Halo', releaseYear: 2010 },
-    { id: '4D530919', name: 'Halo 4', franchise: 'Halo', releaseYear: 2012 },
-    { id: '4D530877', name: 'Halo: Combat Evolved Anniversary', franchise: 'Halo', releaseYear: 2011 },
-    { id: '4D530808', name: 'Halo 3: ODST', franchise: 'Halo', releaseYear: 2009 },
-    { id: '4D530871', name: 'Halo Wars', franchise: 'Halo', releaseYear: 2009 },
-    { id: '41560817', name: 'Modern Warfare 2', franchise: 'Call of Duty', releaseYear: 2009 },
-    { id: '41560855', name: 'Black Ops', franchise: 'Call of Duty', releaseYear: 2010 },
-    { id: '415608CB', name: 'Modern Warfare 3', franchise: 'Call of Duty', releaseYear: 2011 },
-    { id: '415608C3', name: 'Black Ops II', franchise: 'Call of Duty', releaseYear: 2012 },
-    { id: '4156081C', name: 'World at War', franchise: 'Call of Duty', releaseYear: 2008 },
-    { id: '415607E6', name: 'Call of Duty 4: MW', franchise: 'Call of Duty', releaseYear: 2007 },
-    { id: '415608FC', name: 'Call of Duty: Ghosts', franchise: 'Call of Duty', releaseYear: 2013 },
-    { id: '41560914', name: 'Advanced Warfare', franchise: 'Call of Duty', releaseYear: 2014 },
-    { id: '4541088F', name: 'Battlefield 3', franchise: 'Battlefield', releaseYear: 2011 },
-    { id: '45410950', name: 'Battlefield 4', franchise: 'Battlefield', releaseYear: 2013 },
-    { id: '454108A6', name: 'Battlefield: Bad Company 2', franchise: 'Battlefield', releaseYear: 2010 },
-    { id: '5454082B', name: 'Red Dead Redemption', franchise: 'Red Dead', releaseYear: 2010 },
-    { id: '545408A7', name: 'Grand Theft Auto V', franchise: 'GTA', releaseYear: 2013 },
-    { id: '54540825', name: 'Grand Theft Auto IV', franchise: 'GTA', releaseYear: 2008 },
-    { id: '425307D1', name: 'Skyrim', franchise: 'Elder Scrolls', releaseYear: 2011 },
-    { id: '425307D5', name: 'Fallout 3', franchise: 'Fallout', releaseYear: 2008 },
-    { id: '425307E6', name: 'Fallout: New Vegas', franchise: 'Fallout', releaseYear: 2010 },
-    { id: '58410A5A', name: 'Minecraft', franchise: 'Minecraft', releaseYear: 2012 },
-    { id: '4D5307D5', name: 'Mass Effect', franchise: 'Mass Effect', releaseYear: 2007 },
-    { id: '425607E1', name: 'Mass Effect 2', franchise: 'Mass Effect', releaseYear: 2010 },
-    { id: '425607E3', name: 'Mass Effect 3', franchise: 'Mass Effect', releaseYear: 2012 },
-    { id: '53450817', name: 'Dead Space', franchise: 'Dead Space', releaseYear: 2008 },
-    { id: '5345083C', name: 'Dead Space 2', franchise: 'Dead Space', releaseYear: 2011 },
-    { id: '5345085C', name: 'Dead Space 3', franchise: 'Dead Space', releaseYear: 2013 },
-    { id: '55530812', name: 'Saints Row: The Third', franchise: 'Saints Row', releaseYear: 2011 },
-    { id: '555308D4', name: 'Saints Row IV', franchise: 'Saints Row', releaseYear: 2013 },
-    { id: '425607E5', name: 'Dragon Age: Origins', franchise: 'Dragon Age', releaseYear: 2009 },
-    { id: '425607E8', name: 'Dragon Age II', franchise: 'Dragon Age', releaseYear: 2011 },
-    { id: '42560801', name: 'Dragon Age: Inquisition', franchise: 'Dragon Age', releaseYear: 2014 },
-    { id: '4B4E0805', name: 'Ninja Gaiden II', franchise: 'Ninja Gaiden', releaseYear: 2008 },
-    { id: '4B4E082F', name: 'Ninja Gaiden 3', franchise: 'Ninja Gaiden', releaseYear: 2012 },
-    { id: '434307D4', name: 'Devil May Cry 4', franchise: 'DMC', releaseYear: 2008 },
-    { id: '43430824', name: 'DmC: Devil May Cry', franchise: 'DMC', releaseYear: 2013 },
-    { id: '53450802', name: 'Army of Two', franchise: 'Army of Two', releaseYear: 2008 },
-    { id: '5345084F', name: 'Army of Two: The 40th Day', franchise: 'Army of Two', releaseYear: 2010 },
-    { id: '5345085D', name: 'Army of Two: The Devil\'s Cartel', franchise: 'Army of Two', releaseYear: 2013 },
-    { id: '555307D5', name: 'Saints Row', franchise: 'Saints Row', releaseYear: 2006 },
-    { id: '5553081C', name: 'Saints Row 2', franchise: 'Saints Row', releaseYear: 2008 },
-    { id: '54540818', name: 'Mafia II', franchise: 'Mafia', releaseYear: 2010 },
-    { id: '545408B8', name: 'Max Payne 3', franchise: 'Max Payne', releaseYear: 2012 },
-    { id: '5454082D', name: 'L.A. Noire', franchise: 'Rockstar', releaseYear: 2011 },
-    { id: '4D5307E8', name: 'Mass Effect', franchise: 'Mass Effect', releaseYear: 2007 },
-    { id: '41560813', name: 'Call of Duty 3', franchise: 'Call of Duty', releaseYear: 2006 },
-    { id: '415607E1', name: 'Call of Duty 2', franchise: 'Call of Duty', releaseYear: 2005 },
-    { id: '58410824', name: 'Castle Crashers', franchise: 'Arcade', releaseYear: 2008 },
-    { id: '5841095A', name: 'Trials HD', franchise: 'Arcade', releaseYear: 2009 },
-    { id: '58410A47', name: 'Limbo', franchise: 'Arcade', releaseYear: 2010 },
-    { id: '5841125A', name: 'State of Decay', franchise: 'Arcade', releaseYear: 2013 },
-    { id: '58410954', name: 'Shadow Complex', franchise: 'Arcade', releaseYear: 2009 },
-    { id: '5841090B', name: 'BattleBlock Theater', franchise: 'Arcade', releaseYear: 2013 },
-    { id: '58410B3A', name: 'Bastion', franchise: 'Arcade', releaseYear: 2011 },
-    { id: '58410903', name: 'Braid', franchise: 'Arcade', releaseYear: 2008 },
-    { id: '58410846', name: 'Portal: Still Alive', franchise: 'Portal', releaseYear: 2008 },
-    { id: '4541080F', name: 'Mirror\'s Edge', franchise: 'Mirror\'s Edge', releaseYear: 2008 },
-    { id: '4D530910', name: 'Kinect Sports', franchise: 'Kinect', releaseYear: 2010 },
-    { id: '4D530858', name: 'Alan Wake', franchise: 'Alan Wake', releaseYear: 2010 },
-    { id: '584108A1', name: 'Left 4 Dead', franchise: 'Left 4 Dead', releaseYear: 2008 },
-    { id: '58410912', name: 'Left 4 Dead 2', franchise: 'Left 4 Dead', releaseYear: 2009 },
-    { id: '4D5307D1', name: 'Crackdown', franchise: 'Crackdown', releaseYear: 2007 },
-    { id: '4D5308BC', name: 'Crackdown 2', franchise: 'Crackdown', releaseYear: 2010 },
-    { id: '4D53081D', name: 'Fable II', franchise: 'Fable', releaseYear: 2008 },
-    { id: '4D5308D6', name: 'Fable III', franchise: 'Fable', releaseYear: 2010 },
-    { id: '545407F2', name: 'Borderlands', franchise: 'Borderlands', releaseYear: 2009 },
-    { id: '5454087C', name: 'Borderlands 2', franchise: 'Borderlands', releaseYear: 2012 },
-    { id: '545408E5', name: 'BioShock', franchise: 'BioShock', releaseYear: 2007 },
-    { id: '54540850', name: 'BioShock 2', franchise: 'BioShock', releaseYear: 2010 },
-    { id: '545408CF', name: 'BioShock Infinite', franchise: 'BioShock', releaseYear: 2013 },
-    { id: '434307E6', name: 'Resident Evil 5', franchise: 'Resident Evil', releaseYear: 2009 },
-    { id: '43430819', name: 'Resident Evil 6', franchise: 'Resident Evil', releaseYear: 2012 },
-    { id: '434307D1', name: 'Lost Planet', franchise: 'Lost Planet', releaseYear: 2006 },
-    { id: '434307ED', name: 'Lost Planet 2', franchise: 'Lost Planet', releaseYear: 2010 },
-    { id: '4343082B', name: 'Lost Planet 3', franchise: 'Lost Planet', releaseYear: 2013 },
-    { id: '434307D2', name: 'Dead Rising', franchise: 'Dead Rising', releaseYear: 2006 },
-    { id: '434307EC', name: 'Dead Rising 2', franchise: 'Dead Rising', releaseYear: 2010 },
-    { id: '4343081E', name: 'Dead Rising 2: Off the Record', franchise: 'Dead Rising', releaseYear: 2011 },
-    { id: '5454081E', name: 'Midnight Club: LA', franchise: 'Midnight Club', releaseYear: 2008 },
-    { id: '5454081F', name: 'Bully: Scholarship Edition', franchise: 'Rockstar', releaseYear: 2008 },
-    { id: '545408A0', name: 'Max Payne', franchise: 'Max Payne', releaseYear: 2011 },
-    { id: '4D5307D3', name: 'Project Gotham Racing 3', franchise: 'PGR', releaseYear: 2005 },
-    { id: '4D5307FE', name: 'Project Gotham Racing 4', franchise: 'PGR', releaseYear: 2007 },
-    { id: '4D5307E3', name: 'Viva Piñata', franchise: 'Viva Piñata', releaseYear: 2006 },
-    { id: '4D530841', name: 'Viva Piñata: Trouble in Paradise', franchise: 'Viva Piñata', releaseYear: 2008 },
-    { id: '4D5307D6', name: 'Perfect Dark Zero', franchise: 'Perfect Dark', releaseYear: 2005 },
-    { id: '58410970', name: 'Perfect Dark', franchise: 'Perfect Dark', releaseYear: 2010 },
-    { id: '4D5307D2', name: 'Kameo: Elements of Power', franchise: 'Kameo', releaseYear: 2005 },
-    { id: '4D5307F1', name: 'Blue Dragon', franchise: 'Mistwalker', releaseYear: 2006 },
-    { id: '4D53082B', name: 'Lost Odyssey', franchise: 'Mistwalker', releaseYear: 2007 },
-    { id: '4D530839', name: 'Too Human', franchise: 'Too Human', releaseYear: 2008 },
-    { id: '58410829', name: 'UNO', franchise: 'Arcade', releaseYear: 2006 },
-    { id: '58410821', name: 'Geometry Wars: Retro Evolved', franchise: 'Arcade', releaseYear: 2005 },
-    { id: '584108FF', name: 'Geometry Wars: Retro Evolved 2', franchise: 'Arcade', releaseYear: 2008 },
-    { id: '58410823', name: 'Marble Blast Ultra', franchise: 'Arcade', releaseYear: 2006 },
-    { id: '5841084D', name: 'Catan', franchise: 'Arcade', releaseYear: 2007 },
-    { id: '5841084E', name: 'Carcassonne', franchise: 'Arcade', releaseYear: 2007 },
-    { id: '58410861', name: 'Bomberman LIVE', franchise: 'Arcade', releaseYear: 2007 },
-    { id: '5841086C', name: 'Sonic The Hedgehog', franchise: 'Sonic', releaseYear: 2006 },
-    { id: '5841086D', name: 'Sonic The Hedgehog 2', franchise: 'Sonic', releaseYear: 2007 },
-    { id: '58410915', name: 'Sonic The Hedgehog 3', franchise: 'Sonic', releaseYear: 2009 },
-    { id: '58410916', name: 'Sonic & Knuckles', franchise: 'Sonic', releaseYear: 2009 },
-    { id: '58410A20', name: 'Sonic Adventure', franchise: 'Sonic', releaseYear: 2010 },
-    { id: '58411202', name: 'Sonic Adventure 2', franchise: 'Sonic', releaseYear: 2012 },
-    { id: '584108F1', name: 'Castle of Shikigami III', franchise: 'Arcade', releaseYear: 2008 },
-    { id: '584109B6', name: 'After Burner Climax', franchise: 'Arcade', releaseYear: 2010 },
-    { id: '58410B11', name: 'Radiant Silvergun', franchise: 'Arcade', releaseYear: 2011 },
-    { id: '58410A5B', name: 'Ikaruga', franchise: 'Arcade', releaseYear: 2008 },
-    { id: '58410A23', name: 'Guwange', franchise: 'Arcade', releaseYear: 2010 },
-    { id: '584109C2', name: 'Deathsmiles', franchise: 'Arcade', releaseYear: 2010 },
-  ];
-
-  static search(query: string): TitleInfo[] {
-    const q = query.toLowerCase();
-    return this.DATABASE.filter(t => 
-      t.id.toLowerCase().includes(q) || 
-      t.name.toLowerCase().includes(q) || 
-      t.franchise.toLowerCase().includes(q)
-    );
+  static search(query: string) {
+    return searchTitleCatalog(query);
   }
 
-  static getById(id: string): TitleInfo | undefined {
-    return this.DATABASE.find(t => t.id.toUpperCase() === id.toUpperCase());
+  static getById(id: string) {
+    return getTitleInfo(id) || undefined;
+  }
+
+  static getAll() {
+    return getTitleCatalog();
   }
 }
