@@ -83,9 +83,10 @@ export function buildContentRelativePath(
 }
 
 export function buildInstalledContentKey(item: Pick<ContentItem, 'type' | 'fileName' | 'size' | 'metadata'>): string {
+  const contentOwnerId = resolveContentOwnerId(item);
   const titleId = resolveTitleId(item.metadata?.titleId, item.type);
   const typeFolder = CONTENT_TYPE_FOLDER_MAP[item.type] || '00000001';
-  return `${titleId}/${typeFolder}/${item.fileName}_${item.size}`;
+  return `${contentOwnerId}/${titleId}/${typeFolder}/${item.fileName}_${item.size}`;
 }
 
 export function buildInstalledContentKeyFromPathParts(parts: string[], size: number): string | null {
@@ -93,10 +94,11 @@ export function buildInstalledContentKeyFromPathParts(parts: string[], size: num
   const fileName = parts.at(-1);
   const typeFolder = normalizedParts.at(-2);
   const titleId = normalizedParts.at(-3);
+  const contentOwnerId = normalizedParts.at(-4);
 
-  if (!fileName || !typeFolder || !titleId) {
+  if (!fileName || !typeFolder || !titleId || !contentOwnerId) {
     return null;
   }
 
-  return `${titleId}/${typeFolder}/${fileName}_${size}`;
+  return `${contentOwnerId}/${titleId}/${typeFolder}/${fileName}_${size}`;
 }

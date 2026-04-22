@@ -739,14 +739,22 @@ async function startServer() {
   app.post('/api/export/usb', async (req, res) => {
     const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
     const usbPath = req.body?.usbPath;
+    const targetProfileId = typeof req.body?.targetProfileId === 'string'
+      ? req.body.targetProfileId
+      : undefined;
+
+    if (!usbPath || typeof usbPath !== 'string') {
+      return res.status(400).json({ error: 'USB target path is required' });
+    }
+
     const db = await getDb();
-    const summary = await ExportService.exportToUsb(itemIds, usbPath, db.items);
+    const summary = await ExportService.exportToUsb(itemIds, usbPath, db.items, { contentOwnerId: targetProfileId });
 
     await mutateDb((nextDb) => {
       addLog(
         nextDb,
         summary.error > 0 ? 'warn' : 'success',
-        `USB export finished. Copied ${summary.success}, skipped ${summary.skipped}, errors ${summary.error}.`,
+        `USB export finished. Copied ${summary.success}, skipped ${summary.skipped}, errors ${summary.error}${targetProfileId && targetProfileId !== '0000000000000000' ? ` for profile ${targetProfileId}` : ''}.`,
       );
     });
 

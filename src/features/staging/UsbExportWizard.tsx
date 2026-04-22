@@ -20,6 +20,14 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
 
   const stagedItems = useMemo(() => items.filter(i => stagedIds.includes(i.id)), [items, stagedIds]);
   const totalSize = useMemo(() => stagedItems.reduce((acc, i) => acc + i.size, 0), [stagedItems]);
+  const resultSummary = useMemo(() => {
+    if (!results) return null;
+    return {
+      success: results.filter((result: any) => result.status === 'success').length,
+      skipped: results.filter((result: any) => result.status === 'skipped').length,
+      error: results.filter((result: any) => result.status === 'error').length,
+    };
+  }, [results]);
 
   const profileIds = useMemo(() => {
     const ids = new Set(items.map(i => i.metadata.technical?.profileId).filter(id => id && id !== '0000000000000000'));
@@ -91,6 +99,10 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
         })
       });
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to export staged content');
+      }
+
       setResults(data);
       const errorCount = data.filter((r: any) => r.status === 'error').length;
       if (errorCount === 0) {
@@ -101,7 +113,7 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
       }
     } catch (err) {
       console.error("Export failed", err);
-      addToast('Export operation failed', 'error');
+      addToast(err instanceof Error ? err.message : 'Export operation failed', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -326,12 +338,19 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
               >
                 {results ? (
                   <div className="space-y-6 w-full">
-                    <div className="w-20 h-20 bg-xbox-green/20 rounded-full flex items-center justify-center text-xbox-green mx-auto">
+                    <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto ${resultSummary?.error ? 'bg-yellow-500/20 text-yellow-500' : 'bg-xbox-green/20 text-xbox-green'}`}>
                       <CheckCircle2 size={48} />
                     </div>
                     <div className="space-y-2">
-                      <h4 className="text-3xl font-black text-white">Export Complete!</h4>
-                      <p className="text-gray-500">Successfully processed {results.length} items to your USB drive.</p>
+                      <h4 className="text-3xl font-black text-white">{resultSummary?.error ? 'Export Finished with Issues' : 'Export Complete!'}</h4>
+                      <p className="text-gray-500">
+                        Copied {resultSummary?.success || 0}, skipped {resultSummary?.skipped || 0}, errors {resultSummary?.error || 0}.
+                      </p>
+                    </div>
+                    <div className="flex justify-center gap-8 py-2">
+                      <div><p className="text-2xl font-bold text-white">{resultSummary?.success || 0}</p><p className="text-xs text-gray-500 uppercase">Copied</p></div>
+                      <div><p className="text-2xl font-bold text-yellow-500">{resultSummary?.skipped || 0}</p><p className="text-xs text-gray-500 uppercase">Skipped</p></div>
+                      {Boolean(resultSummary?.error) && <div><p className="text-2xl font-bold text-red-500">{resultSummary?.error || 0}</p><p className="text-xs text-gray-500 uppercase">Errors</p></div>}
                     </div>
                     <div className="max-h-48 overflow-y-auto custom-scrollbar bg-surface-panel border border-surface-border rounded-2xl p-4 text-left space-y-2">
                       {results.map((r, i) => (

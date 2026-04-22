@@ -60,6 +60,10 @@ export const StagingArea = () => {
         body: JSON.stringify({ itemIds: stagedIds, targetProfileId: settings.profileId })
       });
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to stage content');
+      }
+
       setResults(data);
       const errorCount = data.filter((r: any) => r.status === 'error').length;
       if (errorCount === 0) {
@@ -70,7 +74,7 @@ export const StagingArea = () => {
       }
     } catch (err) {
       console.error("Staging failed", err);
-      useStore.getState().addToast('Staging operation failed', 'error');
+      useStore.getState().addToast(err instanceof Error ? err.message : 'Staging operation failed', 'error');
     } finally {
       setIsProcessing(false);
     }
