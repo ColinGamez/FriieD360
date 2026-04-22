@@ -129,6 +129,38 @@ export class MetadataService {
     return this.TITLE_MAP[titleId.toUpperCase()] || null;
   }
 
+  private static getPathMatchTitleInfo(fullPath: string, titleId: string) {
+    if (!titleId || titleId === 'Unknown') {
+      return null;
+    }
+
+    const normalizedTitleId = titleId.toUpperCase();
+    const pathParts = fullPath.split(/[\\/]/);
+
+    for (const part of pathParts) {
+      const match = part.match(/^(.*?)\s*\(([0-9A-Fa-f]{8})\)$/);
+      if (!match) {
+        continue;
+      }
+
+      if (match[2].toUpperCase() !== normalizedTitleId) {
+        continue;
+      }
+
+      const name = match[1].trim();
+      if (!name) {
+        continue;
+      }
+
+      return {
+        name,
+        franchise: 'Other',
+      };
+    }
+
+    return null;
+  }
+
   static deriveMetadata(fullPath: string, fileName: string, customMappings: Record<string, string> = {}): ItemMetadata {
     // Look for 8-character hex strings that are likely Title IDs
     // We prioritize IDs found in the path structure (e.g. /Content/.../TITLEID/...)
@@ -153,8 +185,9 @@ export class MetadataService {
 
     const upperTitleId = titleId.toUpperCase();
     const info = this.getTitleInfo(upperTitleId);
+    const pathMatchInfo = this.getPathMatchTitleInfo(fullPath, upperTitleId);
     const customName = customMappings[upperTitleId];
-    const displayName = customName || info?.name;
+    const displayName = customName || info?.name || pathMatchInfo?.name;
 
     const tags: string[] = [];
     if (fullPath.toLowerCase().includes('official')) tags.push('Official');
@@ -163,9 +196,9 @@ export class MetadataService {
     return {
       titleId,
       gameName: displayName || 'Unknown Game',
-      category: info?.franchise || 'Other',
+      category: info?.franchise || pathMatchInfo?.franchise || 'Other',
       tags: tags,
-      coverUrl: this.getCoverArtUrl(upperTitleId, displayName, info?.franchise),
+      coverUrl: this.getCoverArtUrl(upperTitleId, displayName, info?.franchise || pathMatchInfo?.franchise),
       description: displayName
         ? `${displayName}${info?.franchise ? ` • ${info.franchise}` : ''}`
         : undefined,

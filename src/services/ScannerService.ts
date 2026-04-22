@@ -36,10 +36,52 @@ export class ScannerService {
         await this.walk(folder, cache, results, deep, autoRepair, customMappings);
       }
 
+      this.enrichResolvedMetadata(results);
       return results;
     } finally {
       this.progress.isScanning = false;
       this.progress.folder = '';
+    }
+  }
+
+  private static enrichResolvedMetadata(results: any[]) {
+    const inferredNames = new Map<string, string>();
+
+    for (const item of results) {
+      const titleId = item.metadata?.titleId;
+      const gameName = item.metadata?.gameName;
+
+      if (!titleId || titleId === 'Unknown' || !gameName || gameName === 'Unknown Game') {
+        continue;
+      }
+
+      if (/^Title [0-9A-F]{8}$/i.test(gameName)) {
+        continue;
+      }
+
+      inferredNames.set(titleId.toUpperCase(), gameName);
+    }
+
+    for (const item of results) {
+      const titleId = item.metadata?.titleId;
+      if (!titleId || titleId === 'Unknown') {
+        continue;
+      }
+
+      const normalizedTitleId = titleId.toUpperCase();
+      if (item.metadata?.gameName === 'Unknown Game') {
+        const inferredName = inferredNames.get(normalizedTitleId);
+        if (inferredName) {
+          item.metadata.gameName = inferredName;
+          item.metadata.description = item.metadata.description || inferredName;
+          continue;
+        }
+      }
+
+      if (item.metadata?.gameName === 'Unknown Game') {
+        item.metadata.gameName = `Title ${normalizedTitleId}`;
+        item.metadata.description = item.metadata.description || `Unmapped Title ID ${normalizedTitleId}`;
+      }
     }
   }
 
@@ -99,8 +141,8 @@ export class ScannerService {
               const ext = path.extname(file).toUpperCase();
               const header = await MetadataParser.verifyHeader(fullPath);
               
-              // Only add if it has a valid Xbox header or we're explicitly looking for it
-              if (header.isValid || ext === '.CON' || ext === '') {
+              // Allow extensionless packages only when the header verifies as Xbox content.
+              if (header.isValid || ext === '.CON') {
                 
                 let currentFullPath = fullPath;
                 let currentFile = file;
