@@ -31,8 +31,9 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: SidebarItemProps) =
 );
 
 export const AppLayout = ({ activeTab, setActiveTab, children }: { activeTab: ViewID, setActiveTab: (tab: ViewID) => void, children: React.ReactNode }) => {
-  const { isScanning, scanProgress, globalSearch, setGlobalSearch, theme, triggerScan, toasts, removeToast, searchHistory } = useStore();
+  const { isScanning, scanProgress, globalSearch, setGlobalSearch, theme, triggerScan, toasts, removeToast, searchHistory, settings } = useStore();
   const [showHistory, setShowHistory] = React.useState(false);
+  const hasSourceFolders = settings.sourceFolders.length > 0;
   
   return (
     <div className={`flex h-screen bg-surface-back text-gray-100 overflow-hidden theme-${theme}`} onClick={() => setShowHistory(false)}>
@@ -137,12 +138,19 @@ export const AppLayout = ({ activeTab, setActiveTab, children }: { activeTab: Vi
 
         <div className="mt-auto pt-6 border-t border-surface-border space-y-1">
           <button 
-            onClick={() => triggerScan()}
+            onClick={() => {
+              if (hasSourceFolders) {
+                void triggerScan();
+                return;
+              }
+
+              setActiveTab('settings');
+            }}
             disabled={isScanning}
             className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group hover:bg-xbox-green/10 text-gray-400 hover:text-xbox-green mb-2"
           >
             <RefreshCw size={20} className={`${isScanning ? 'animate-spin text-xbox-green' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-            <span className="text-sm font-bold">{isScanning ? 'Scanning...' : 'Quick Scan'}</span>
+            <span className="text-sm font-bold">{isScanning ? 'Scanning...' : hasSourceFolders ? 'Quick Scan' : 'Add Sources'}</span>
           </button>
           <SidebarItem icon={History} label="Activity" active={activeTab === 'activity'} onClick={() => setActiveTab('activity')} />
           <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />

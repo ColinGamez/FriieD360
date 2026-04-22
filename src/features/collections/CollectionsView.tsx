@@ -6,7 +6,7 @@ import { Modal } from '../../components/ui/Modal';
 import { GameHub } from '../library/GameHub';
 
 export const CollectionsView = () => {
-  const { collections, items, upsertCollection, deleteCollection } = useStore();
+  const { collections, items, upsertCollection, deleteCollection, addToast } = useStore();
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [showOptions, setShowOptions] = useState<string | null>(null);
   const [activeSmartType, setActiveSmartType] = useState<string | null>(null);
@@ -14,6 +14,9 @@ export const CollectionsView = () => {
   const [newCollectionName, setNewCollectionName] = useState('');
   const [selectedTitleId, setSelectedTitleId] = useState<string | null>(null);
   const [confirmClearId, setConfirmClearId] = useState<string | null>(null);
+  const [renameCollectionId, setRenameCollectionId] = useState<string | null>(null);
+  const [renameCollectionName, setRenameCollectionName] = useState('');
+  const [deleteCollectionId, setDeleteCollectionId] = useState<string | null>(null);
 
   const smartCollections = useMemo(() => [
     { id: 'recent', name: 'Recently Added', icon: Clock, color: 'text-blue-400', filter: (i: any) => {
@@ -59,6 +62,60 @@ export const CollectionsView = () => {
     a.download = `friied360_collection_${collection.name.toLowerCase().replace(/\s+/g, '_')}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    addToast(`Exported "${collection.name}" collection pack`, 'success');
+  };
+
+  const handleCreateCollection = async () => {
+    const trimmedName = newCollectionName.trim();
+    if (!trimmedName) {
+      addToast('Enter a collection name first', 'error');
+      return;
+    }
+
+    const created = await upsertCollection(
+      { name: trimmedName, itemIds: [], description: '' },
+      { successMessage: `Created "${trimmedName}"` },
+    );
+    if (!created) return;
+
+    setNewCollectionName('');
+    setIsCreateModalOpen(false);
+  };
+
+  const handleRenameCollection = async () => {
+    const collection = collections.find(c => c.id === renameCollectionId);
+    const trimmedName = renameCollectionName.trim();
+
+    if (!collection) return;
+    if (!trimmedName) {
+      addToast('Collection name cannot be empty', 'error');
+      return;
+    }
+
+    const renamed = await upsertCollection(
+      { ...collection, name: trimmedName },
+      {
+        successMessage: `Renamed collection to "${trimmedName}"`,
+        errorMessage: `Failed to rename "${collection.name}"`,
+      },
+    );
+    if (!renamed) return;
+
+    setRenameCollectionId(null);
+    setRenameCollectionName('');
+  };
+
+  const handleDeleteCollection = async () => {
+    if (!deleteCollectionId) return;
+    const collection = collections.find((entry) => entry.id === deleteCollectionId);
+    const deleted = await deleteCollection(deleteCollectionId, {
+      successMessage: collection ? `Deleted "${collection.name}"` : 'Collection deleted',
+      errorMessage: collection ? `Failed to delete "${collection.name}"` : 'Failed to delete collection',
+    });
+    if (!deleted) return;
+
+    if (activeCollectionId === deleteCollectionId) setActiveCollectionId(null);
+    setDeleteCollectionId(null);
   };
 
   return (
@@ -143,8 +200,8 @@ export const CollectionsView = () => {
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    const newName = prompt("New name?", c.name);
-                    if (newName) upsertCollection({ ...c, name: newName });
+                    setRenameCollectionId(c.id);
+                    setRenameCollectionName(c.name);
                     setShowOptions(null);
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
@@ -165,10 +222,7 @@ export const CollectionsView = () => {
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete collection "${c.name}"?`)) {
-                      deleteCollection(c.id);
-                      if (activeCollectionId === c.id) setActiveCollectionId(null);
-                    }
+                    setDeleteCollectionId(c.id);
                     setShowOptions(null);
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all"
@@ -218,9 +272,15 @@ export const CollectionsView = () => {
                           />
                           {activeCollection && (
                             <button 
-                              onClick={() => {
+                              onClick={async () => {
                                 const updatedIds = activeCollection.itemIds.filter(id => id !== item.id);
-                                upsertCollection({ ...activeCollection, itemIds: updatedIds });
+                                await upsertCollection(
+                                  { ...activeCollection, itemIds: updatedIds },
+                                  {
+                                    successMessage: `Removed "${item.name}" from ${activeCollection.name}`,
+                                    errorMessage: `Failed to update ${activeCollection.name}`,
+                                  },
+                                );
                               }}
                               className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
                               title="Remove from collection"
@@ -257,13 +317,7 @@ export const CollectionsView = () => {
               Cancel
             </button>
             <button 
-              onClick={() => {
-                if (newCollectionName) {
-                  upsertCollection({ name: newCollectionName, itemIds: [], description: '' });
-                  setNewCollectionName('');
-                  setIsCreateModalOpen(false);
-                }
-              }}
+              onClick={handleCreateCollection}
               className="px-6 py-2 bg-xbox-green hover:bg-xbox-hover text-white rounded-lg text-sm font-bold transition-all"
             >
               Create Collection
@@ -297,10 +351,17 @@ export const CollectionsView = () => {
               Cancel
             </button>
             <button 
-              onClick={() => {
+              onClick={async () => {
                 const collection = collections.find(c => c.id === confirmClearId);
                 if (collection) {
-                  upsertCollection({ ...collection, itemIds: [] });
+                  const cleared = await upsertCollection(
+                    { ...collection, itemIds: [] },
+                    {
+                      successMessage: `Cleared "${collection.name}"`,
+                      errorMessage: `Failed to clear "${collection.name}"`,
+                    },
+                  );
+                  if (!cleared) return;
                 }
                 setConfirmClearId(null);
               }}
@@ -313,6 +374,70 @@ export const CollectionsView = () => {
       >
         <p className="text-sm text-gray-400">
           Are you sure you want to remove all items from this collection? This action cannot be undone.
+        </p>
+      </Modal>
+
+      <Modal
+        isOpen={!!renameCollectionId}
+        onClose={() => {
+          setRenameCollectionId(null);
+          setRenameCollectionName('');
+        }}
+        title="Rename Collection"
+        footer={
+          <>
+            <button
+              onClick={() => {
+                setRenameCollectionId(null);
+                setRenameCollectionName('');
+              }}
+              className="px-4 py-2 text-sm font-bold text-gray-400 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRenameCollection}
+              className="px-6 py-2 bg-xbox-green hover:bg-xbox-hover text-white rounded-lg text-sm font-bold transition-all"
+            >
+              Save Name
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-400">Give this collection a clearer display name.</p>
+          <input
+            type="text"
+            value={renameCollectionName}
+            onChange={(e) => setRenameCollectionName(e.target.value)}
+            placeholder="Collection name"
+            className="w-full bg-surface-panel border border-surface-border rounded-xl px-4 py-3 text-white focus:border-xbox-green outline-none transition-all"
+            autoFocus
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!deleteCollectionId}
+        onClose={() => setDeleteCollectionId(null)}
+        title="Delete Collection"
+        type="warning"
+        footer={
+          <>
+            <button onClick={() => setDeleteCollectionId(null)} className="px-4 py-2 text-sm font-bold text-gray-400 hover:text-white">
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteCollection}
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition-all"
+            >
+              Delete Collection
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-400">
+          This will remove the collection container, but the Xbox content inside it will stay in your library.
         </p>
       </Modal>
 

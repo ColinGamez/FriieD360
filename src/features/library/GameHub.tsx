@@ -10,7 +10,7 @@ interface GameHubProps {
 }
 
 export const GameHub = ({ titleId, onClose }: GameHubProps) => {
-  const { items, addToStaging, stagedIds, fetchOnlineMetadata } = useStore();
+  const { items, addToStaging, stagedIds, fetchOnlineMetadata, addToast } = useStore();
   const [isFetching, setIsFetching] = useState(false);
 
   const relatedItems = useMemo(() => {
@@ -48,7 +48,10 @@ export const GameHub = ({ titleId, onClose }: GameHubProps) => {
 
   const handleFetchOnline = async () => {
     setIsFetching(true);
-    await fetchOnlineMetadata(relatedItems.map(i => i.id));
+    const updated = await fetchOnlineMetadata(relatedItems.map(i => i.id));
+    if (updated > 0) {
+      addToast(`Refreshed metadata for ${updated} related items`, 'success');
+    }
     setIsFetching(false);
   };
 
@@ -58,7 +61,7 @@ export const GameHub = ({ titleId, onClose }: GameHubProps) => {
         {/* Header Section */}
         <div className="relative h-64 shrink-0 overflow-hidden">
           <img 
-            src={MetadataService.getCoverArtUrl(titleId)} 
+            src={gameInfo?.coverUrl || MetadataService.getCoverArtUrl(titleId)} 
             alt={gameInfo?.gameName}
             className="w-full h-full object-cover blur-2xl opacity-30 scale-110"
             referrerPolicy="no-referrer"
@@ -69,7 +72,7 @@ export const GameHub = ({ titleId, onClose }: GameHubProps) => {
             <div className="flex items-center gap-8">
               <div className="w-32 h-48 bg-surface-panel rounded-xl border border-surface-border shadow-2xl overflow-hidden group">
                 <img 
-                  src={MetadataService.getCoverArtUrl(titleId)} 
+                  src={gameInfo?.coverUrl || MetadataService.getCoverArtUrl(titleId)} 
                   alt={gameInfo?.gameName}
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
@@ -96,7 +99,7 @@ export const GameHub = ({ titleId, onClose }: GameHubProps) => {
                 className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
               >
                 {isFetching ? <RefreshCw size={20} className="animate-spin" /> : <Globe size={20} />}
-                <span>Fetch Metadata</span>
+                <span>Refresh Metadata</span>
               </button>
               <button 
                 onClick={handleStageAll}

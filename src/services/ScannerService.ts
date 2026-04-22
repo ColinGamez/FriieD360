@@ -19,24 +19,70 @@ export class ScannerService {
 
   static async scanFolders(folders: string[], existingItems: any[], deep: boolean = false, autoRepair: boolean = false, customMappings: Record<string, string> = {}) {
     this.progress = { total: 0, current: 0, folder: '', isScanning: true };
-    
-    const cache = new Map(existingItems.map(i => [i.fullPath, i]));
-    const results: any[] = [];
 
-    // First pass: count all files to provide accurate progress
-    for (const folder of folders) {
-      if (!(await fs.pathExists(folder))) continue;
-      await this.countFiles(folder);
+    try {
+      const cache = new Map(existingItems.map(i => [i.fullPath, i]));
+      const results: any[] = [];
+
+      // First pass: count all files to provide accurate progress
+      for (const folder of folders) {
+        if (!(await fs.pathExists(folder))) continue;
+        await this.countFiles(folder);
+      }
+
+      // Second pass: walk and process
+      for (const folder of folders) {
+        if (!(await fs.pathExists(folder))) continue;
+        await this.walk(folder, cache, results, deep, autoRepair, customMappings);
+      }
+
+      this.enrichResolvedMetadata(results);
+      return results;
+    } finally {
+      this.progress.isScanning = false;
+      this.progress.folder = '';
+    }
+  }
+
+  private static enrichResolvedMetadata(results: any[]) {
+    const inferredNames = new Map<string, string>();
+
+    for (const item of results) {
+      const titleId = item.metadata?.titleId;
+      const gameName = item.metadata?.gameName;
+
+      if (!titleId || titleId === 'Unknown' || !gameName || gameName === 'Unknown Game') {
+        continue;
+      }
+
+      if (/^Title [0-9A-F]{8}$/i.test(gameName)) {
+        continue;
+      }
+
+      inferredNames.set(titleId.toUpperCase(), gameName);
     }
 
-    // Second pass: walk and process
-    for (const folder of folders) {
-      if (!(await fs.pathExists(folder))) continue;
-      await this.walk(folder, cache, results, deep, autoRepair, customMappings);
-    }
+    for (const item of results) {
+      const titleId = item.metadata?.titleId;
+      if (!titleId || titleId === 'Unknown') {
+        continue;
+      }
 
-    this.progress.isScanning = false;
-    return results;
+      const normalizedTitleId = titleId.toUpperCase();
+      if (item.metadata?.gameName === 'Unknown Game') {
+        const inferredName = inferredNames.get(normalizedTitleId);
+        if (inferredName) {
+          item.metadata.gameName = inferredName;
+          item.metadata.description = item.metadata.description || inferredName;
+          continue;
+        }
+      }
+
+      if (item.metadata?.gameName === 'Unknown Game') {
+        item.metadata.gameName = `Title ${normalizedTitleId}`;
+        item.metadata.description = item.metadata.description || `Unmapped Title ID ${normalizedTitleId}`;
+      }
+    }
   }
 
   private static async countFiles(dir: string) {
@@ -95,8 +141,8 @@ export class ScannerService {
               const ext = path.extname(file).toUpperCase();
               const header = await MetadataParser.verifyHeader(fullPath);
               
-              // Only add if it has a valid Xbox header or we're explicitly looking for it
-              if (header.isValid || ext === '.CON' || ext === '') {
+              // Allow extensionless packages only when the header verifies as Xbox content.
+              if (header.isValid || ext === '.CON') {
                 
                 let currentFullPath = fullPath;
                 let currentFile = file;

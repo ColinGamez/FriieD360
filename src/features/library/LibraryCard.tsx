@@ -3,6 +3,7 @@ import { Package, Star, FolderPlus, Plus, Heart, Edit2, Check, X, Info, Cpu, Use
 import { useStore } from '../../store/useStore';
 import { ContentItem } from '../../types';
 import { MetadataService } from '../../services/MetadataService';
+import { buildContentRelativePath, buildInstalledContentKey } from '../../utils/contentPaths';
 
 interface LibraryCardProps {
   item: ContentItem;
@@ -27,8 +28,7 @@ export const LibraryCard = ({ item, isSelected, onSelect, onOpenHub, onPreview, 
   });
 
   const isStaged = stagedIds.includes(item.id);
-  const heuristic = `${item.fileName}_${item.size}`;
-  const isInstalled = installedHeuristics.includes(heuristic);
+  const isInstalled = installedHeuristics.includes(buildInstalledContentKey(item));
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (isSelectionMode && onSelect) {
@@ -96,7 +96,7 @@ export const LibraryCard = ({ item, isSelected, onSelect, onOpenHub, onPreview, 
       <div className="aspect-[2/3] bg-surface-panel relative flex items-center justify-center overflow-hidden">
         {item.metadata.titleId && item.metadata.titleId !== 'Unknown' ? (
           <img 
-            src={MetadataService.getCoverArtUrl(item.metadata.titleId)} 
+            src={item.metadata.coverUrl || MetadataService.getCoverArtUrl(item.metadata.titleId)} 
             alt={item.metadata.gameName}
             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
             referrerPolicy="no-referrer"
@@ -311,24 +311,21 @@ export const LibraryCard = ({ item, isSelected, onSelect, onOpenHub, onPreview, 
                         <ImageIcon size={16} className="text-xbox-green" />
                         <span className="text-xs font-bold">Package Contents</span>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="text-gray-400">/Content/0000000000000000/</span>
-                          <span className="text-gray-600">DIR</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] pl-4">
-                          <span className="text-gray-300">{item.metadata.titleId}/</span>
-                          <span className="text-gray-600">DIR</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] pl-8">
-                          <span className="text-gray-300">00000002/</span>
-                          <span className="text-gray-600">DIR</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] pl-12">
-                          <span className="text-xbox-green font-bold">{item.fileName}</span>
-                          <span className="text-gray-600">FILE</span>
-                        </div>
-                      </div>
+                      {(() => {
+                        const contentPath = buildContentRelativePath(item).split('/');
+                        return (
+                          <div className="space-y-2">
+                            {contentPath.map((segment, index) => (
+                              <div key={`${segment}-${index}`} className="flex items-center justify-between text-[10px]" style={{ paddingLeft: `${index * 16}px` }}>
+                                <span className={index === contentPath.length - 1 ? 'text-xbox-green font-bold' : 'text-gray-300'}>
+                                  {segment}{index < contentPath.length - 1 ? '/' : ''}
+                                </span>
+                                <span className="text-gray-600">{index === contentPath.length - 1 ? 'FILE' : 'DIR'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <p className="text-[10px] text-gray-500 italic text-center px-4">
                       This structure is inferred from the STFS header and standard Xbox 360 content paths.

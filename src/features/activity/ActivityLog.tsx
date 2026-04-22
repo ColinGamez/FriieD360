@@ -1,39 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { History, Info, AlertCircle, CheckCircle2, Trash2, Download } from 'lucide-react';
+import { Modal } from '../../components/ui/Modal';
+import { useStore } from '../../store/useStore';
+import { ActivityLog as ActivityLogEntry } from '../../types';
+import { getErrorMessage, readJsonOrThrow } from '../../utils/api';
 
 export const ActivityLog = () => {
-  const [logs, setLogs] = useState<any[]>([]);
+  const { addToast } = useStore();
+  const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
+  const [showClearModal, setShowClearModal] = useState(false);
 
   const filteredLogs = logs.filter(l => filter === 'all' || l.level === filter);
 
   const fetchLogs = () => {
     setIsLoading(true);
     fetch('/api/logs')
-      .then(res => res.json())
+      .then(res => readJsonOrThrow<ActivityLogEntry[]>(res, 'Failed to load activity history'))
       .then(data => {
-        setLogs(data.reverse()); // Show newest first
+        setLogs([...data].reverse());
         setIsLoading(false);
       })
       .catch(err => {
         console.error('Failed to fetch logs', err);
+        addToast(getErrorMessage(err, 'Failed to load activity history'), 'error');
         setIsLoading(false);
       });
   };
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+  }, [addToast]);
 
   const clearLogs = async () => {
-    if (!confirm('Are you sure you want to clear the activity history?')) return;
-    
     try {
-      await fetch('/api/logs/clear', { method: 'POST' });
+      const res = await fetch('/api/logs/clear', { method: 'POST' });
+      await readJsonOrThrow<{ success: boolean }>(res, 'Failed to clear logs');
       setLogs([]);
+      setShowClearModal(false);
+      addToast('Activity history cleared', 'success');
     } catch (err) {
       console.error('Failed to clear logs', err);
+      addToast(getErrorMessage(err, 'Failed to clear activity history'), 'error');
     }
   };
 
@@ -46,6 +55,7 @@ export const ActivityLog = () => {
     a.download = `friied360_activity_log_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    addToast('Activity log exported', 'success');
   };
 
   return (
@@ -59,7 +69,7 @@ export const ActivityLog = () => {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex bg-surface-card border border-surface-border rounded-lg p-1">
-            {['all', 'info', 'success', 'error'].map(f => (
+            {['all', 'info', 'success', 'warn', 'error'].map(f => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -79,7 +89,7 @@ export const ActivityLog = () => {
               <Download size={16} /> Export Log
           </button>
           <button 
-            onClick={clearLogs}
+            onClick={() => setShowClearModal(true)}
             disabled={logs.length === 0}
             className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:hover:text-gray-400"
           >
@@ -105,17 +115,54 @@ export const ActivityLog = () => {
               <div className="flex-1">
                 <p className="text-sm font-medium">{log.message}</p>
                 <p className="text-[10px] text-gray-500 mt-1">{new Date(log.timestamp).toLocaleString()}</p>
+                {log.details && (
+                  <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">{log.details}</p>
+                )}
               </div>
             </div>
           ))}
-          {logs.length === 0 && !isLoading && (
+          {filteredLogs.length === 0 && !isLoading && logs.length === 0 && (
             <div className="py-20 text-center text-gray-500 italic">No activity recorded yet.</div>
+          )}
+          {filteredLogs.length === 0 && !isLoading && logs.length > 0 && (
+            <div className="py-20 text-center text-gray-500 italic">
+              No {filter === 'all' ? 'activity entries' : `${filter} entries`} match the current filter.
+            </div>
           )}
           {isLoading && (
             <div className="py-20 text-center text-gray-500 italic">Loading history...</div>
           )}
         </div>
       </div>
+
+      <Modal
+        isOpen={showClearModal}
+        onClose={() => setShowClearModal(false)}
+        title="Clear Activity History"
+        type="warning"
+        footer={
+          <>
+            <button onClick={() => setShowClearModal(false)} className="px-4 py-2 text-sm font-bold text-gray-400 hover:text-white">
+              Cancel
+            </button>
+            <button
+              onClick={clearLogs}
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition-all"
+            >
+              Clear History
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-300">
+            This will permanently remove the in-app activity history for scans, fixes, and maintenance actions.
+          </p>
+          <p className="text-xs text-yellow-500/80">
+            Export the log first if you want to keep a record of recent work.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 };

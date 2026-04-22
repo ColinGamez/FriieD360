@@ -1,7 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import fs from 'fs-extra';
 import path from 'path';
+import { ContentItem } from '../types';
 import { StagingService } from './StagingService';
 
 const execAsync = promisify(exec);
@@ -41,12 +41,18 @@ export class ExportService {
     }
   }
 
-  static async exportToUsb(itemIds: string[], usbRoot: string, items: any[]) {
+  static async exportToUsb(
+    itemIds: string[],
+    usbRoot: string,
+    items: ContentItem[],
+    options: { contentOwnerId?: string } = {},
+  ) {
     const selectedItems = items.filter(i => itemIds.includes(i.id));
-    const ops = await StagingService.prepareOperations(selectedItems, usbRoot);
+    const ops = await StagingService.prepareOperations(selectedItems, usbRoot, options);
     const results = await StagingService.execute(ops);
     
     const summary = { 
+      results,
       success: results.filter(r => r.status === 'success').length, 
       skipped: results.filter(r => r.status === 'skipped').length, 
       error: results.filter(r => r.status === 'error').length 

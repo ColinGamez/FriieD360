@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Folder, Plus, Trash2, HardDrive, RefreshCw, AlertTriangle, CheckCircle2, Usb, Wrench, Hash, Tag, Palette, Monitor, Zap, Moon, UserCircle } from 'lucide-react';
 import { useStore, ThemeID } from '../../store/useStore';
+import { Modal } from '../../components/ui/Modal';
+import { getAvailableProfileIds, getProfileLabel } from '../../utils/profiles';
+import { getErrorMessage, readJsonOrThrow } from '../../utils/api';
+import type { PathValidationResult } from '../../types';
 
 export const Settings = () => {
-  const { settings, updateSettings, triggerScan, isScanning, fetchSettings, refreshInstalledStatus, theme, setTheme } = useStore();
+  const { settings, updateSettings, triggerScan, isScanning, fetchSettings, refreshInstalledStatus, theme, setTheme, items, collections, clearLibrary, addToast } = useStore();
   const [newPath, setNewPath] = useState('');
   const [isPathValid, setIsPathValid] = useState<boolean | null>(null);
   const [installedPath, setInstalledPath] = useState('');
@@ -11,37 +15,117 @@ export const Settings = () => {
   const [mappingName, setMappingName] = useState('');
   const [profileId, setProfileId] = useState('');
   const [profileName, setProfileName] = useState('');
+  const [outputFolderDraft, setOutputFolderDraft] = useState(settings.outputFolder);
+  const [showClearLibraryModal, setShowClearLibraryModal] = useState(false);
+  const availableProfileIds = getAvailableProfileIds(settings, items);
 
   useEffect(() => { fetchSettings(); }, []);
+  useEffect(() => { setOutputFolderDraft(settings.outputFolder); }, [settings.outputFolder]);
+
+  const validatePath = async (candidatePath: string) => {
+    const res = await fetch('/api/settings/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: candidatePath })
+    });
+    return readJsonOrThrow<PathValidationResult>(res, 'Unable to validate path');
+  };
 
   const handleAddFolder = async () => {
-    if (!newPath) return;
-    
-    const res = await fetch('/api/settings/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: newPath })
-    });
-    const { exists } = await res.json();
+    const trimmedPath = newPath.trim();
+    if (!trimmedPath) {
+      setIsPathValid(false);
+      addToast('Enter a source folder path', 'error');
+      return;
+    }
 
-    if (exists) {
-        const updatedFolders = [...settings.sourceFolders, newPath];
+    if (settings.sourceFolders.includes(trimmedPath)) {
+      setIsPathValid(false);
+      addToast('That source folder is already added', 'info');
+      return;
+    }
+
+    try {
+      const { exists, isDirectory } = await validatePath(trimmedPath);
+
+      if (!exists) {
+        setIsPathValid(false);
+        addToast('That path does not exist', 'error');
+        return;
+      }
+
+      if (!isDirectory) {
+        setIsPathValid(false);
+        addToast('Source folders must point to a directory, not a file', 'error');
+        return;
+      }
+
+      const updatedFolders = [...settings.sourceFolders, trimmedPath];
         await updateSettings({ sourceFolders: updatedFolders });
+        if (!useStore.getState().settings.sourceFolders.includes(trimmedPath)) {
+          return;
+        }
+
         setNewPath('');
         setIsPathValid(null);
-    } else {
-        setIsPathValid(false);
+        addToast('Source folder added', 'success');
+    } catch (error) {
+      setIsPathValid(false);
+      addToast(getErrorMessage(error, 'Unable to validate source folder'), 'error');
     }
   };
 
   const removeFolder = async (pathToRemove: string) => {
     const updatedFolders = settings.sourceFolders.filter(p => p !== pathToRemove);
     await updateSettings({ sourceFolders: updatedFolders });
+    addToast('Source folder removed', 'success');
   };
 
-  const handleCheckInstalled = () => {
-    if (installedPath) {
-      refreshInstalledStatus(installedPath);
+  const handleCheckInstalled = async () => {
+    const trimmedInstalledPath = installedPath.trim();
+    if (!trimmedInstalledPath) return;
+
+    const count = await refreshInstalledStatus(trimmedInstalledPath);
+    if (count === null) {
+      return;
+    }
+
+    addToast(
+      count > 0
+        ? `Installed-content scan matched ${count} packages`
+        : 'Installed-content scan completed with no matches',
+      count > 0 ? 'success' : 'info',
+    );
+  };
+
+  const handleSaveOutputFolder = async () => {
+    const trimmedOutputFolder = outputFolderDraft.trim();
+    if (trimmedOutputFolder === settings.outputFolder) {
+      setOutputFolderDraft(trimmedOutputFolder);
+      return;
+    }
+
+    if (trimmedOutputFolder) {
+      try {
+        const { exists, isDirectory } = await validatePath(trimmedOutputFolder);
+        if (exists && !isDirectory) {
+          addToast('Staging output must be a folder path, not a file', 'error');
+          setOutputFolderDraft(settings.outputFolder);
+          return;
+        }
+      } catch (error) {
+        addToast(getErrorMessage(error, 'Unable to validate staging output path'), 'error');
+        setOutputFolderDraft(settings.outputFolder);
+        return;
+      }
+    }
+
+    await updateSettings({ outputFolder: trimmedOutputFolder });
+
+    const savedOutputFolder = useStore.getState().settings.outputFolder;
+    setOutputFolderDraft(savedOutputFolder);
+    if (savedOutputFolder === trimmedOutputFolder) {
+      addToast('Staging output updated', 'success');
     }
   };
 
@@ -179,11 +263,11 @@ export const Settings = () => {
           </div>
           <div className="p-4 bg-surface-panel rounded-xl border border-surface-border">
             <p className="text-[9px] font-black uppercase text-gray-500 mb-1">Library Size</p>
-            <p className="text-sm font-bold">{useStore.getState().items.length} Items</p>
+            <p className="text-sm font-bold">{items.length} Items</p>
           </div>
           <div className="p-4 bg-surface-panel rounded-xl border border-surface-border">
             <p className="text-[9px] font-black uppercase text-gray-500 mb-1">Collections</p>
-            <p className="text-sm font-bold">{useStore.getState().collections.length} Groups</p>
+            <p className="text-sm font-bold">{collections.length} Groups</p>
           </div>
         </div>
       </section>
@@ -235,13 +319,41 @@ export const Settings = () => {
         </div>
         <div className="p-6">
           <p className="text-sm text-gray-400 mb-4">When you "Stage" items, they will be copied to this clean directory.</p>
-          <input 
-            type="text" 
-            value={settings.outputFolder}
-            onChange={(e) => updateSettings({ outputFolder: e.target.value })}
-            placeholder="E.g. D:\Clean_Xbox_USB"
-            className="w-full bg-surface-panel border border-surface-border rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-xbox-green text-sm font-mono"
-          />
+          <div className="flex gap-3">
+            <input 
+              type="text" 
+              value={outputFolderDraft}
+              onChange={(e) => setOutputFolderDraft(e.target.value)}
+              onBlur={handleSaveOutputFolder}
+              placeholder="E.g. D:\Clean_Xbox_USB"
+              className="flex-1 bg-surface-panel border border-surface-border rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-xbox-green text-sm font-mono"
+            />
+            <button
+              onClick={handleSaveOutputFolder}
+              disabled={outputFolderDraft === settings.outputFolder}
+              className="px-4 py-2 bg-xbox-green hover:bg-xbox-hover disabled:bg-surface-panel disabled:text-gray-600 text-white rounded-lg transition-all font-bold"
+            >
+              Save
+            </button>
+          </div>
+
+          <div className="mt-6 p-4 bg-surface-panel rounded-xl border border-surface-border space-y-3">
+            <div>
+              <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Default Content Owner</p>
+              <p className="text-xs text-gray-500 mt-1">Used by quick stage copy and one-click USB export for profile-scoped content.</p>
+            </div>
+            <select
+              value={settings.profileId || '0000000000000000'}
+              onChange={(e) => updateSettings({ profileId: e.target.value })}
+              className="w-full bg-surface-back border border-surface-border rounded-lg px-4 py-2.5 outline-none focus:ring-1 focus:ring-xbox-green text-sm font-mono"
+            >
+              {availableProfileIds.map((id) => (
+                <option key={id} value={id}>
+                  {getProfileLabel(id, settings.profileMappings)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </section>
 
@@ -295,11 +407,14 @@ export const Settings = () => {
             />
             <button 
               onClick={() => {
-                if (profileId.length === 16 && profileName) {
-                  updateSettings({ profileMappings: { ...settings.profileMappings, [profileId]: profileName } });
+                if (!/^[0-9A-F]{16}$/.test(profileId) || !profileName.trim()) {
+                  addToast('Enter a valid 16-character Profile ID and name', 'error');
+                  return;
+                }
+                updateSettings({ profileMappings: { ...settings.profileMappings, [profileId]: profileName.trim() } });
                   setProfileId('');
                   setProfileName('');
-                }
+                  addToast('Profile mapping added', 'success');
               }}
               className="px-4 py-2 bg-xbox-green hover:bg-xbox-hover text-white rounded-lg transition-all font-bold flex items-center justify-center space-x-2"
             >
@@ -360,11 +475,14 @@ export const Settings = () => {
             />
             <button 
               onClick={() => {
-                if (mappingId.length === 8 && mappingName) {
-                  updateSettings({ customMappings: { ...settings.customMappings, [mappingId]: mappingName } });
+                if (!/^[0-9A-F]{8}$/.test(mappingId) || !mappingName.trim()) {
+                  addToast('Enter a valid 8-character Title ID and game name', 'error');
+                  return;
+                }
+                updateSettings({ customMappings: { ...settings.customMappings, [mappingId]: mappingName.trim() } });
                   setMappingId('');
                   setMappingName('');
-                }
+                  addToast('Custom Title ID mapping added', 'success');
               }}
               className="px-4 py-2 bg-xbox-green hover:bg-xbox-hover text-white rounded-lg transition-all font-bold flex items-center justify-center space-x-2"
             >
@@ -405,12 +523,7 @@ export const Settings = () => {
 
           <div className="pt-8 border-t border-surface-border">
             <button 
-              onClick={async () => {
-                if (confirm('Are you sure you want to clear the entire library? This will reset all favorites and metadata overrides.')) {
-                  await fetch('/api/library/clear', { method: 'POST' });
-                  window.location.reload();
-                }
-              }}
+              onClick={() => setShowClearLibraryModal(true)}
               className="text-xs text-red-500 hover:text-red-400 font-bold flex items-center gap-2 transition-colors"
             >
               <Trash2 size={14} /> Clear Library Database
@@ -422,6 +535,39 @@ export const Settings = () => {
       <footer className="text-center pt-10 text-gray-600 text-[10px] uppercase tracking-[0.2em] font-black">
         FriieD360 Studio • Build 1.0.0
       </footer>
+
+      <Modal
+        isOpen={showClearLibraryModal}
+        onClose={() => setShowClearLibraryModal(false)}
+        title="Clear Library Database"
+        type="warning"
+        footer={
+          <>
+            <button onClick={() => setShowClearLibraryModal(false)} className="px-4 py-2 text-gray-400 hover:text-white font-bold">Cancel</button>
+            <button
+              onClick={async () => {
+                await clearLibrary();
+                setShowClearLibraryModal(false);
+              }}
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-lg shadow-red-600/20"
+            >
+              Clear Library
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-gray-300">
+            This will remove all indexed items from FriieD360 Studio, clear the staging queue, and empty collection memberships.
+          </p>
+          <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex gap-3">
+            <AlertTriangle className="text-yellow-500 shrink-0" size={20} />
+            <p className="text-xs text-yellow-500/80 leading-relaxed">
+              Your actual files on disk will remain untouched. You can re-scan later to rebuild the library.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import { X, ChevronRight, ChevronLeft, HardDrive, User, Package, ShieldCheck, AlertCircle, CheckCircle2, Play, ArrowRight, Folder, Save, Info } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { X, ChevronRight, ChevronLeft, HardDrive, User, Package, ShieldCheck, AlertCircle, CheckCircle2, Play, Save, Info } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import { ContentItem } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { readJsonOrThrow } from '../../utils/api';
+import { getAvailableProfileIds, getProfileLabel } from '../../utils/profiles';
+import { getStorageUsagePercent, hasEnoughFreeSpace } from '../../utils/storage';
 
 interface UsbExportWizardProps {
   onClose: () => void;
@@ -10,20 +12,32 @@ interface UsbExportWizardProps {
 
 type Step = 'review' | 'profiles' | 'target' | 'execute';
 
+interface CopyResult {
+  fileName: string;
+  status: 'success' | 'skipped' | 'error';
+}
+
 export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
-  const { items, stagedIds, settings, updateSettings, clearStaging, addToast } = useStore();
+  const { items, stagedIds, settings, updateSettings, clearStaging, addToast, setActiveTab } = useStore();
   const [currentStep, setCurrentStep] = useState<Step>('review');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [results, setResults] = useState<any[] | null>(null);
+  const [results, setResults] = useState<CopyResult[] | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string>(settings.profileId || '0000000000000000');
+  const [freeSpace, setFreeSpace] = useState<number | null>(null);
+  const [isCheckingSpace, setIsCheckingSpace] = useState(false);
 
   const stagedItems = useMemo(() => items.filter(i => stagedIds.includes(i.id)), [items, stagedIds]);
   const totalSize = useMemo(() => stagedItems.reduce((acc, i) => acc + i.size, 0), [stagedItems]);
+  const resultSummary = useMemo(() => {
+    if (!results) return null;
+    return {
+      success: results.filter((result) => result.status === 'success').length,
+      skipped: results.filter((result) => result.status === 'skipped').length,
+      error: results.filter((result) => result.status === 'error').length,
+    };
+  }, [results]);
 
-  const profileIds = useMemo(() => {
-    const ids = new Set(items.map(i => i.metadata.technical?.profileId).filter(id => id && id !== '0000000000000000'));
-    return ['0000000000000000', ...Array.from(ids)];
-  }, [items]);
+  const profileIds = useMemo(() => getAvailableProfileIds(settings, items), [items, settings]);
 
   const formatSize = (bytes: number) => {
     const k = 1024;
@@ -33,9 +47,52 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  useEffect(() => {
+    if (!settings.outputFolder) {
+      setFreeSpace(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkFreeSpace = async () => {
+      setIsCheckingSpace(true);
+      try {
+        const res = await fetch(`/api/system/free-space?path=${encodeURIComponent(settings.outputFolder)}`);
+        const data = await readJsonOrThrow<{ free: number | null }>(res, 'Failed to check available space');
+        if (!cancelled) {
+          setFreeSpace(typeof data.free === 'number' ? data.free : null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setFreeSpace(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsCheckingSpace(false);
+        }
+      }
+    };
+
+    void checkFreeSpace();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.outputFolder]);
+
+  const hasEnoughSpace = hasEnoughFreeSpace(freeSpace, totalSize);
+  const requiredPercent = getStorageUsagePercent(freeSpace, totalSize);
+
   const handleExecute = async () => {
+    if (!settings.outputFolder || !hasEnoughSpace) return;
+
     setIsProcessing(true);
     try {
+      if (settings.profileId !== selectedProfileId) {
+        await updateSettings({ profileId: selectedProfileId });
+      }
+
       const res = await fetch('/api/staging/copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,9 +101,10 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
           targetProfileId: selectedProfileId
         })
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<CopyResult[]>(res, 'Failed to export staged content');
+
       setResults(data);
-      const errorCount = data.filter((r: any) => r.status === 'error').length;
+      const errorCount = data.filter((r) => r.status === 'error').length;
       if (errorCount === 0) {
         addToast('Export completed successfully', 'success');
         clearStaging();
@@ -55,7 +113,7 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
       }
     } catch (err) {
       console.error("Export failed", err);
-      addToast('Export operation failed', 'error');
+      addToast(err instanceof Error ? err.message : 'Export operation failed', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -177,7 +235,7 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
                         <User size={24} />
                       </div>
                       <div>
-                        <p className="text-sm font-black text-white">{id === '0000000000000000' ? 'Global / All Profiles' : 'Xbox 360 Profile'}</p>
+                        <p className="text-sm font-black text-white">{getProfileLabel(id, settings.profileMappings)}</p>
                         <p className="text-[10px] font-mono text-gray-500 mt-1">{id}</p>
                       </div>
                     </button>
@@ -187,8 +245,8 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
                 <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl flex gap-3">
                   <Info size={20} className="text-blue-400 shrink-0" />
                   <p className="text-xs text-blue-400/80 leading-relaxed">
-                    Content like DLC and Themes will be placed under <span className="font-mono text-white">Content/{selectedProfileId}/</span>. 
-                    If you are using a modified console, "Global" is usually sufficient for GOD/XBLA content.
+                    Profile-linked content such as themes, gamerpics, and avatar items will use <span className="font-mono text-white">Content/{selectedProfileId}/</span>.
+                    Base games, XBLA, and most shared content still remain in the global content root.
                   </p>
                 </div>
               </motion.div>
@@ -219,7 +277,10 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
                       </div>
                     </div>
                     <button 
-                      onClick={() => addToast('Change output folder in Settings', 'info')}
+                      onClick={() => {
+                        setActiveTab('settings');
+                        onClose();
+                      }}
                       className="text-xs font-bold text-xbox-green hover:underline"
                     >
                       Change Path
@@ -229,12 +290,25 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
                       <span className="text-gray-500">Storage Utilization</span>
-                      <span className="text-white">{formatSize(totalSize)} / Available</span>
+                      <span className="text-white">
+                        {isCheckingSpace
+                          ? 'Checking space...'
+                          : freeSpace !== null
+                            ? `${formatSize(totalSize)} / ${formatSize(freeSpace)} free`
+                            : `${formatSize(totalSize)} required`}
+                      </span>
                     </div>
                     <div className="h-3 bg-surface-card rounded-full overflow-hidden border border-surface-border">
-                      <div className="h-full bg-xbox-green w-[45%] shadow-[0_0_10px_rgba(16,124,16,0.5)]" />
+                      <div
+                        className={`h-full shadow-[0_0_10px_rgba(16,124,16,0.5)] ${hasEnoughSpace ? 'bg-xbox-green' : 'bg-red-500'}`}
+                        style={{ width: `${requiredPercent}%` }}
+                      />
                     </div>
-                    <p className="text-[10px] text-gray-500 italic">Estimated time to copy: ~2 minutes (based on USB 2.0 speeds)</p>
+                    <p className="text-[10px] text-gray-500 italic">
+                      {freeSpace !== null
+                        ? `This copy will use about ${requiredPercent}% of the currently available space.`
+                        : 'Free-space data is unavailable, so confirm the target drive manually before exporting.'}
+                    </p>
                   </div>
                 </div>
 
@@ -242,6 +316,13 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
                   <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-xl flex gap-3 text-red-500">
                     <AlertCircle size={20} className="shrink-0" />
                     <p className="text-sm font-bold">You must configure an output folder in Settings before exporting.</p>
+                  </div>
+                )}
+
+                {settings.outputFolder && !hasEnoughSpace && (
+                  <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-xl flex gap-3 text-red-500">
+                    <AlertCircle size={20} className="shrink-0" />
+                    <p className="text-sm font-bold">The selected output drive does not have enough free space for this export.</p>
                   </div>
                 )}
               </motion.div>
@@ -257,12 +338,19 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
               >
                 {results ? (
                   <div className="space-y-6 w-full">
-                    <div className="w-20 h-20 bg-xbox-green/20 rounded-full flex items-center justify-center text-xbox-green mx-auto">
+                    <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto ${resultSummary?.error ? 'bg-yellow-500/20 text-yellow-500' : 'bg-xbox-green/20 text-xbox-green'}`}>
                       <CheckCircle2 size={48} />
                     </div>
                     <div className="space-y-2">
-                      <h4 className="text-3xl font-black text-white">Export Complete!</h4>
-                      <p className="text-gray-500">Successfully processed {results.length} items to your USB drive.</p>
+                      <h4 className="text-3xl font-black text-white">{resultSummary?.error ? 'Export Finished with Issues' : 'Export Complete!'}</h4>
+                      <p className="text-gray-500">
+                        Copied {resultSummary?.success || 0}, skipped {resultSummary?.skipped || 0}, errors {resultSummary?.error || 0}.
+                      </p>
+                    </div>
+                    <div className="flex justify-center gap-8 py-2">
+                      <div><p className="text-2xl font-bold text-white">{resultSummary?.success || 0}</p><p className="text-xs text-gray-500 uppercase">Copied</p></div>
+                      <div><p className="text-2xl font-bold text-yellow-500">{resultSummary?.skipped || 0}</p><p className="text-xs text-gray-500 uppercase">Skipped</p></div>
+                      {Boolean(resultSummary?.error) && <div><p className="text-2xl font-bold text-red-500">{resultSummary?.error || 0}</p><p className="text-xs text-gray-500 uppercase">Errors</p></div>}
                     </div>
                     <div className="max-h-48 overflow-y-auto custom-scrollbar bg-surface-panel border border-surface-border rounded-2xl p-4 text-left space-y-2">
                       {results.map((r, i) => (
@@ -318,9 +406,9 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
               if (currentStep === 'target') setCurrentStep('profiles');
               if (currentStep === 'execute') setCurrentStep('target');
             }}
-            disabled={currentStep === 'review' || isProcessing || !!results}
-            className="flex items-center gap-2 px-6 py-2 text-sm font-bold text-gray-500 hover:text-white disabled:opacity-0 transition-all"
-          >
+                disabled={currentStep === 'review' || isProcessing || !!results}
+                className="flex items-center gap-2 px-6 py-2 text-sm font-bold text-gray-500 hover:text-white disabled:opacity-0 transition-all"
+              >
             <ChevronLeft size={20} />
             Back
           </button>
@@ -339,7 +427,7 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
                   else if (currentStep === 'profiles') setCurrentStep('target');
                   else if (currentStep === 'target') setCurrentStep('execute');
                 }}
-                disabled={currentStep === 'target' && !settings.outputFolder}
+                disabled={currentStep === 'target' && (!settings.outputFolder || !hasEnoughSpace)}
                 className="flex items-center gap-2 px-8 py-2 bg-xbox-green hover:bg-xbox-hover text-white rounded-lg font-bold text-sm transition-all shadow-lg shadow-xbox-green/20"
               >
                 Next Step

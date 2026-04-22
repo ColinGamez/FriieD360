@@ -5,14 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "node server.ts",
+    "start": "tsx server.ts --prod",
     "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "lint": "tsc --noEmit",
+    "update:title-db": "node scripts/update-title-db.mjs"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",

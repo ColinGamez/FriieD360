@@ -4,7 +4,7 @@ import { User, Package, ChevronRight, Search, Filter, HardDrive, Cpu, Edit2, Che
 import { ContentItem } from '../../types';
 
 export const ProfileExplorer = () => {
-  const { items, settings, updateSettings, addToStaging } = useStore();
+  const { items, settings, updateSettings, addToStaging, addToast } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -55,7 +55,7 @@ export const ProfileExplorer = () => {
   const handleStageAll = () => {
     if (!selectedProfileData) return;
     selectedProfileData.items.forEach(item => addToStaging(item.id));
-    alert(`Added ${selectedProfileData.items.length} items to staging queue.`);
+    addToast(`Added ${selectedProfileData.items.length} profile items to staging`, 'success');
   };
 
   const formatSize = (bytes: number) => {

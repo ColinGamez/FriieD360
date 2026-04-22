@@ -4,21 +4,31 @@ import { Modal } from '../../components/ui/Modal';
 import { TitleIdService, TitleInfo } from '../../services/TitleIdService';
 import { AlertCircle, CheckCircle2, ArrowRight, Wrench, ShieldCheck, Loader2, Copy, Trash2, FileSearch, X, Hash, Edit2, Filter, Search, RefreshCw, PieChart as ChartIcon, User, AlertTriangle, Info, Zap, ChevronRight, ExternalLink } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { getErrorMessage, readJsonOrThrow } from '../../utils/api';
+import type { RepairOperationResult } from '../../types';
+import type { RenameOperation } from '../../services/RenameService';
+
+const getRepairSummary = (results: RepairOperationResult[]) => ({
+  successCount: results.filter((result) => result.status === 'success').length,
+  errorCount: results.filter((result) => result.status === 'error').length,
+});
 
 export const ExtensionRepair = () => {
-  const { items, triggerScan, bulkDeleteItems, runIntegrityCheck } = useStore();
+  const { items, triggerScan, bulkDeleteItems, runIntegrityCheck, addToast } = useStore();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [repairResults, setRepairResults] = useState<any[] | null>(null);
+  const [repairResults, setRepairResults] = useState<RepairOperationResult[] | null>(null);
   const [activeTab, setActiveTab] = useState<'extensions' | 'duplicates' | 'integrity' | 'rename' | 'usage' | 'bulk' | 'lookup' | 'health'>('extensions');
   const [renameTemplate, setRenameTemplate] = useState('[TitleID] [GameName] - [Name]');
-  const [renamePreview, setRenamePreview] = useState<any[] | null>(null);
+  const [renamePreview, setRenamePreview] = useState<RenameOperation[] | null>(null);
   const [bulkData, setBulkData] = useState({ gameName: '', category: '' });
   const [lookupQuery, setLookupQuery] = useState('');
   const [lookupResults, setLookupResults] = useState<TitleInfo[]>([]);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showIntegrityModal, setShowIntegrityModal] = useState(false);
   const [showFixModal, setShowFixModal] = useState<string | null>(null);
+  const [showRenameConfirmModal, setShowRenameConfirmModal] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const { previewRename, applyRename, bulkUpdateMetadata, resolveDuplicates } = useStore();
 
@@ -65,19 +75,34 @@ export const ExtensionRepair = () => {
     setIsProcessing(true);
     
     try {
+      const idsToRepair = [...selectedIds];
       const res = await fetch('/api/repair/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemIds: selectedIds })
+        body: JSON.stringify({ itemIds: idsToRepair })
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<RepairOperationResult[]>(res, 'Failed to repair selected files');
       setRepairResults(data);
-      await triggerScan();
+
+      const { successCount, errorCount } = getRepairSummary(data);
+      if (successCount > 0) {
+        await triggerScan();
+      }
+
+      if (errorCount === 0) {
+        addToast(`Repaired ${successCount} file${successCount === 1 ? '' : 's'}`, 'success');
+      } else if (successCount > 0) {
+        addToast(`Repaired ${successCount} file${successCount === 1 ? '' : 's'}, ${errorCount} failed`, 'error');
+      } else {
+        addToast('Unable to repair the selected files', 'error');
+      }
+
+      setSelectedIds(data.filter((result) => result.status === 'error').map((result) => result.id));
     } catch (err) {
       console.error("Repair failed", err);
+      addToast(getErrorMessage(err, 'Repair failed'), 'error');
     } finally {
       setIsProcessing(false);
-      setSelectedIds([]);
     }
   };
 
@@ -102,6 +127,32 @@ export const ExtensionRepair = () => {
     await resolveDuplicates(strategy);
     setIsProcessing(false);
     setShowDuplicateModal(false);
+  };
+
+  const handleApplyRename = async () => {
+    if (!renamePreview) return;
+
+    try {
+      setIsProcessing(true);
+      const renamed = await applyRename(renamePreview);
+      if (!renamed) {
+        return;
+      }
+      setRenamePreview(null);
+      setShowRenameConfirmModal(false);
+      addToast(`Renamed ${renamePreview.length} files`, 'success');
+    } catch (err) {
+      console.error('Batch rename failed', err);
+      addToast('Batch rename failed', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeleteHealthItem = async () => {
+    if (!confirmDeleteId) return;
+    await bulkDeleteItems([confirmDeleteId]);
+    setConfirmDeleteId(null);
   };
 
   return (
@@ -197,15 +248,22 @@ export const ExtensionRepair = () => {
                       </div>
                       <div>
                         <h4 className="font-bold text-white">{result.name}</h4>
-                        <p className="text-xs text-gray-500">{result.franchise} • {result.releaseYear}</p>
+                        <p className="text-xs text-gray-500">
+                          {[result.franchise, result.releaseYear].filter(Boolean).join(' • ') || 'Xbox 360 Title ID'}
+                        </p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-mono font-black text-xbox-green">{result.id}</p>
                       <button 
-                        onClick={() => {
-                          navigator.clipboard.writeText(result.id);
-                          alert('Title ID copied to clipboard!');
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(result.id);
+                            addToast(`Copied Title ID ${result.id}`, 'success');
+                          } catch (err) {
+                            console.error('Failed to copy Title ID', err);
+                            addToast('Unable to copy Title ID', 'error');
+                          }
                         }}
                         className="text-[10px] font-bold text-gray-500 hover:text-white uppercase tracking-widest flex items-center gap-1 ml-auto"
                       >
@@ -286,6 +344,44 @@ export const ExtensionRepair = () => {
                   </tbody>
                 </table>
               </div>
+
+              {repairResults && (
+                <div className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+                  <div className="bg-surface-panel px-6 py-4 border-b border-surface-border flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-white">Repair Report</h4>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest">
+                        {getRepairSummary(repairResults).successCount} fixed • {getRepairSummary(repairResults).errorCount} failed
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setRepairResults(null)}
+                      className="text-xs font-bold text-gray-500 hover:text-white transition-colors"
+                    >
+                      Clear Report
+                    </button>
+                  </div>
+                  <div className="max-h-[320px] overflow-y-auto custom-scrollbar divide-y divide-surface-border/50">
+                    {repairResults.map((result) => (
+                      <div key={`${result.id}-${result.newPath}`} className="p-4 flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-xs font-mono text-white truncate">{result.fileName}</p>
+                          <p className="text-[10px] text-gray-500 font-mono truncate">
+                            {result.status === 'error' ? result.error || 'Unknown repair error' : result.newFileName}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 px-2 py-1 rounded text-[10px] font-black uppercase ${
+                          result.status === 'success'
+                            ? 'bg-xbox-green/10 text-xbox-green'
+                            : 'bg-red-500/10 text-red-500'
+                        }`}>
+                          {result.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -428,16 +524,7 @@ export const ExtensionRepair = () => {
                 Preview All
               </button>
               <button 
-                onClick={async () => {
-                  if (!renamePreview) return;
-                  if (confirm(`Apply rename to ${renamePreview.length} files? This will modify files on your disk.`)) {
-                    setIsProcessing(true);
-                    await applyRename(renamePreview);
-                    setRenamePreview(null);
-                    setIsProcessing(false);
-                    alert('Batch rename complete!');
-                  }
-                }}
+                onClick={() => setShowRenameConfirmModal(true)}
                 disabled={!renamePreview || isProcessing}
                 className="px-6 py-2 bg-xbox-green hover:bg-xbox-hover disabled:opacity-50 rounded-lg font-bold transition-all flex items-center space-x-2 shadow-lg shadow-xbox-green/20"
               >
@@ -813,9 +900,7 @@ export const ExtensionRepair = () => {
                             <Wrench size={14} />
                           </button>
                           <button 
-                            onClick={() => {
-                              if (confirm('Delete this item?')) bulkDeleteItems([item.id]);
-                            }}
+                            onClick={() => setConfirmDeleteId(item.id)}
                             className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all"
                             title="Delete Item"
                           >
@@ -881,7 +966,6 @@ export const ExtensionRepair = () => {
                           });
                           setIsProcessing(false);
                           setShowFixModal(null);
-                          useStore.getState().addToast('Metadata updated successfully', 'success');
                         }}
                         className="w-full py-3 bg-xbox-green hover:bg-xbox-hover text-white rounded-xl font-bold transition-all shadow-lg shadow-xbox-green/20 flex items-center justify-center gap-2"
                       >
@@ -918,7 +1002,6 @@ export const ExtensionRepair = () => {
                               });
                               setIsProcessing(false);
                               setShowFixModal(null);
-                              useStore.getState().addToast('Metadata updated successfully', 'success');
                             }}
                             className="w-full p-3 bg-surface-panel hover:bg-surface-border rounded-lg text-left flex justify-between items-center group transition-all"
                           >
@@ -985,6 +1068,63 @@ export const ExtensionRepair = () => {
               <ChevronRight size={16} className="text-gray-600 group-hover:text-xbox-green" />
             </button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showRenameConfirmModal}
+        onClose={() => setShowRenameConfirmModal(false)}
+        title="Apply Batch Rename"
+        type="warning"
+        footer={
+          <>
+            <button onClick={() => setShowRenameConfirmModal(false)} className="px-4 py-2 text-gray-400 hover:text-white font-bold">Cancel</button>
+            <button
+              onClick={handleApplyRename}
+              className="px-6 py-2 bg-xbox-green hover:bg-xbox-hover text-white rounded-xl font-bold shadow-lg shadow-xbox-green/20"
+            >
+              Rename Files
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-gray-300">
+            Apply the current rename preview to <b>{renamePreview?.length || 0}</b> files on disk.
+          </p>
+          <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex gap-3">
+            <AlertTriangle className="text-yellow-500 shrink-0" size={20} />
+            <p className="text-xs text-yellow-500/80 leading-relaxed">
+              This changes real filenames on disk. Review the preview list before continuing.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        title="Delete Library Item"
+        type="warning"
+        footer={
+          <>
+            <button onClick={() => setConfirmDeleteId(null)} className="px-4 py-2 text-gray-400 hover:text-white font-bold">Cancel</button>
+            <button
+              onClick={handleDeleteHealthItem}
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-lg shadow-red-600/20"
+            >
+              Remove Item
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-gray-300">
+            Remove <b>{items.find(i => i.id === confirmDeleteId)?.name || 'this item'}</b> from the FriieD360 library index.
+          </p>
+          <p className="text-xs text-yellow-500/80">
+            This does not delete the underlying file from your disk.
+          </p>
         </div>
       </Modal>
 

@@ -2,6 +2,8 @@ import React from 'react';
 import { Package, Palette, Star, AlertCircle, PackageCheck, RefreshCw, PieChart as ChartIcon, UserCircle, HardDrive, Loader2, Zap } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useStore } from '../../store/useStore';
+import { ActivityLog as ActivityLogEntry } from '../../types';
+import { getErrorMessage, readJsonOrThrow } from '../../utils/api';
 
 const StatCard = ({ title, value, icon: Icon, color }: any) => (
   <div className="bg-surface-card border border-surface-border p-6 rounded-2xl hover:border-xbox-green/40 transition-all group">
@@ -18,32 +20,56 @@ const StatCard = ({ title, value, icon: Icon, color }: any) => (
 );
 
 export const Dashboard = () => {
-  const { items, stagedIds, setActiveTab, triggerScan, isScanning, settings } = useStore();
-  const [logs, setLogs] = React.useState<any[]>([]);
-  const [sysStatus, setSysStatus] = React.useState<any>(null);
+  const { items, stagedIds, setActiveTab, triggerScan, isScanning, settings, scanProgress } = useStore();
+  const [logs, setLogs] = React.useState<ActivityLogEntry[]>([]);
+  const [logsError, setLogsError] = React.useState<string | null>(null);
+  const [sysStatus, setSysStatus] = React.useState<{
+    cpu: number;
+    memory: number;
+    uptime: number;
+    platform: string;
+    arch: string;
+  } | null>(null);
+  const [statusError, setStatusError] = React.useState<string | null>(null);
   
   React.useEffect(() => {
-    const fetchLogs = () => {
-      fetch('/api/logs')
-        .then(res => res.json())
-        .then(data => setLogs(data.reverse()))
-        .catch(err => console.error('Failed to fetch logs', err));
+    const fetchLogs = async () => {
+      try {
+        const res = await fetch('/api/logs');
+        const data = await readJsonOrThrow<ActivityLogEntry[]>(res, 'Failed to fetch activity history');
+        setLogs([...data].reverse());
+        setLogsError(null);
+      } catch (err) {
+        console.error('Failed to fetch logs', err);
+        setLogsError(getErrorMessage(err, 'Unable to load recent activity'));
+      }
     };
 
-    const fetchStatus = () => {
-      fetch('/api/system/status')
-        .then(res => res.json())
-        .then(data => setSysStatus(data))
-        .catch(err => console.error('Failed to fetch system status', err));
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch('/api/system/status');
+        const data = await readJsonOrThrow<{
+          cpu: number;
+          memory: number;
+          uptime: number;
+          platform: string;
+          arch: string;
+        }>(res, 'Failed to fetch system status');
+        setSysStatus(data);
+        setStatusError(null);
+      } catch (err) {
+        console.error('Failed to fetch system status', err);
+        setStatusError(getErrorMessage(err, 'Unable to read system status'));
+      }
     };
 
-    fetchLogs();
-    fetchStatus();
-    const interval = setInterval(() => {
-      fetchStatus();
-      fetchLogs();
+    void fetchLogs();
+    void fetchStatus();
+    const interval = window.setInterval(() => {
+      void fetchStatus();
+      void fetchLogs();
     }, 10000);
-    return () => clearInterval(interval);
+    return () => window.clearInterval(interval);
   }, [isScanning]);
 
   const typeDistribution = React.useMemo(() => {
@@ -84,6 +110,12 @@ export const Dashboard = () => {
     return [...items].sort((a, b) => b.size - a.size).slice(0, 5);
   }, [items]);
 
+  const recentItems = React.useMemo(() => {
+    return [...items]
+      .sort((a, b) => new Date(b.dateModified).getTime() - new Date(a.dateModified).getTime())
+      .slice(0, 5);
+  }, [items]);
+
   const COLORS = ['#107C10', '#0078D4', '#5C2D91', '#D83B01', '#FFB900', '#B4009E', '#00B7C3', '#E81123'];
 
   const avatarCount = items.filter(i => i.type === 'avatar_item').length;
@@ -91,17 +123,41 @@ export const Dashboard = () => {
   const profileCount = new Set(items.map(i => i.metadata.technical?.profileId).filter(id => id && id !== '0000000000000000')).size;
   const favoriteCount = items.filter(i => i.isFavorite).length;
   const repairNeeded = items.filter(i => i.isExtensionless).length;
-  const missingTech = items.filter(i => !i.metadata.technical || i.metadata.technical.profileId === '0000000000000000').length;
   const unknownTitles = items.filter(i => i.metadata.gameName === 'Unknown Game').length;
-  const missingCovers = items.filter(i => !i.metadata.coverUrl).length;
-  const healthyItems = items.length - unknownTitles - repairNeeded;
-  const healthPercentage = Math.round((healthyItems / (items.length || 1)) * 100);
+  const healthData = React.useMemo(() => {
+    const buckets = {
+      healthy: 0,
+      metadata: 0,
+      repair: 0,
+      both: 0,
+    };
 
-  const healthData = [
-    { name: 'Healthy', value: healthyItems, color: '#107C10' },
-    { name: 'Unknown', value: unknownTitles, color: '#D83B01' },
-    { name: 'Repair', value: repairNeeded, color: '#E81123' },
-  ];
+    items.forEach((item) => {
+      const needsMetadata = item.metadata.gameName === 'Unknown Game';
+      const needsRepair = item.isExtensionless;
+
+      if (needsMetadata && needsRepair) {
+        buckets.both += 1;
+      } else if (needsMetadata) {
+        buckets.metadata += 1;
+      } else if (needsRepair) {
+        buckets.repair += 1;
+      } else {
+        buckets.healthy += 1;
+      }
+    });
+
+    return [
+      { name: 'Healthy', value: buckets.healthy, color: '#107C10' },
+      { name: 'Metadata', value: buckets.metadata, color: '#D83B01' },
+      { name: 'Repair', value: buckets.repair, color: '#E81123' },
+      { name: 'Both', value: buckets.both, color: '#FFB900' },
+    ];
+  }, [items]);
+  const healthyItems = healthData.find((entry) => entry.name === 'Healthy')?.value || 0;
+  const healthPercentage = Math.round((healthyItems / (items.length || 1)) * 100);
+  const hasSourceFolders = settings.sourceFolders.length > 0;
+  const recentLogs = React.useMemo(() => logs.slice(0, 6), [logs]);
 
   const [selectedFranchise, setSelectedFranchise] = React.useState<string | null>(null);
 
@@ -121,6 +177,36 @@ export const Dashboard = () => {
   const franchises = React.useMemo(() => {
     return Array.from(new Set(items.map(i => i.metadata.category || 'Other'))).sort();
   }, [items]);
+
+  const headline = React.useMemo(() => {
+    if (isScanning) {
+      return scanProgress.folder
+        ? `Scanning ${scanProgress.current} of ${scanProgress.total}: ${scanProgress.folder}`
+        : 'Deep scan in progress across your configured source folders.';
+    }
+
+    if (!hasSourceFolders) {
+      return 'Add a source folder in Settings to start indexing your Xbox 360 content.';
+    }
+
+    if (items.length === 0) {
+      return 'Source folders are configured. Run a scan to build your first library index.';
+    }
+
+    if (repairNeeded > 0 || unknownTitles > 0) {
+      const issues: string[] = [];
+      if (repairNeeded > 0) {
+        issues.push(`${repairNeeded} need repair`);
+      }
+      if (unknownTitles > 0) {
+        issues.push(`${unknownTitles} need metadata`);
+      }
+
+      return `Library attention needed: ${issues.join(' and ')}.`;
+    }
+
+    return `Indexed ${items.length} items across ${settings.sourceFolders.length} source folder${settings.sourceFolders.length === 1 ? '' : 's'}.`;
+  }, [hasSourceFolders, isScanning, items.length, repairNeeded, scanProgress.current, scanProgress.folder, scanProgress.total, settings.sourceFolders.length, unknownTitles]);
 
   const profileActivity = React.useMemo(() => {
     const counts: Record<string, number> = {};
@@ -144,15 +230,22 @@ export const Dashboard = () => {
       <header className="flex justify-between items-start">
         <div>
           <h2 className="text-3xl font-bold">Welcome, Chief</h2>
-          <p className="text-gray-400 mt-1">System is healthy. All source folders are indexed.</p>
+          <p className="text-gray-400 mt-1">{headline}</p>
         </div>
         <button 
-          onClick={() => triggerScan(true)}
+          onClick={() => {
+            if (hasSourceFolders) {
+              void triggerScan(true);
+              return;
+            }
+
+            setActiveTab('settings');
+          }}
           disabled={isScanning}
           className="flex items-center gap-2 px-4 py-2 bg-surface-card border border-surface-border rounded-lg hover:border-xbox-green transition-all disabled:opacity-50 text-sm font-bold"
         >
           <RefreshCw size={16} className={isScanning ? 'animate-spin' : ''} />
-          {isScanning ? 'Scanning...' : 'Deep Scan'}
+          {isScanning ? 'Scanning...' : hasSourceFolders ? 'Deep Scan' : 'Open Settings'}
         </button>
       </header>
 
@@ -360,14 +453,20 @@ export const Dashboard = () => {
                 <Zap size={20} className="text-xbox-green" /> Recent Activity
               </h4>
               <div className="flex-1 space-y-4 overflow-y-auto custom-scrollbar pr-2">
-                {logs.slice(0, 6).map((log, idx) => (
-                  <div key={idx} className="flex gap-3 relative">
-                    {idx !== logs.slice(0, 6).length - 1 && (
+                {logsError && (
+                  <div className="text-[10px] text-yellow-500 leading-relaxed">
+                    {logs.length > 0 ? `${logsError}. Showing the last loaded activity.` : logsError}
+                  </div>
+                )}
+                {recentLogs.map((log, idx) => (
+                  <div key={log.id} className="flex gap-3 relative">
+                    {idx !== recentLogs.length - 1 && (
                       <div className="absolute left-[11px] top-6 bottom-0 w-px bg-surface-border" />
                     )}
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                      log.type === 'error' ? 'bg-red-500/20 text-red-500' :
-                      log.type === 'success' ? 'bg-xbox-green/20 text-xbox-green' :
+                      log.level === 'error' ? 'bg-red-500/20 text-red-500' :
+                      log.level === 'success' ? 'bg-xbox-green/20 text-xbox-green' :
+                      log.level === 'warn' ? 'bg-yellow-500/20 text-yellow-500' :
                       'bg-blue-500/20 text-blue-400'
                     }`}>
                       <div className="w-2 h-2 rounded-full bg-current" />
@@ -378,14 +477,14 @@ export const Dashboard = () => {
                     </div>
                   </div>
                 ))}
-                {logs.length === 0 && (
+                {logs.length === 0 && !logsError && (
                   <div className="flex-1 flex flex-col items-center justify-center text-gray-600 italic text-xs">
                     No recent activity
                   </div>
                 )}
               </div>
               <button 
-                onClick={() => window.location.hash = '#/activity'}
+                onClick={() => setActiveTab('activity')}
                 className="mt-6 w-full py-2 bg-surface-panel border border-surface-border rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-xbox-green hover:text-white transition-all"
               >
                 View All Logs
@@ -416,7 +515,7 @@ export const Dashboard = () => {
           <div className="bg-surface-card border border-surface-border rounded-2xl p-6">
             <h4 className="text-lg font-bold mb-4">Recent Items Found</h4>
             <div className="space-y-4">
-              {items.slice(0, 5).map((item) => (
+              {recentItems.map((item) => (
                 <div key={item.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-surface-panel transition-colors border border-transparent hover:border-surface-border">
                   <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 bg-surface-panel rounded-lg border border-surface-border flex items-center justify-center">
@@ -432,7 +531,7 @@ export const Dashboard = () => {
                   </span>
                 </div>
               ))}
-              {items.length === 0 && (
+              {recentItems.length === 0 && (
                 <div className="py-10 text-center text-gray-500 italic">No items scanned yet.</div>
               )}
             </div>
@@ -521,6 +620,10 @@ export const Dashboard = () => {
                   <span>{sysStatus.platform} ({sysStatus.arch})</span>
                   <span>Uptime: {Math.floor(sysStatus.uptime / 3600)}h {Math.floor((sysStatus.uptime % 3600) / 60)}m</span>
                 </div>
+              </div>
+            ) : statusError ? (
+              <div className="h-20 flex items-center justify-center text-center text-xs text-yellow-500 leading-relaxed px-4">
+                {statusError}
               </div>
             ) : (
               <div className="h-20 flex items-center justify-center">
