@@ -4,13 +4,26 @@ import { PackageCheck, ArrowRight, Trash2, Play, CheckCircle, AlertCircle, Copy,
 import { FolderTreePreview } from './FolderTreePreview';
 import { UsbExportWizard } from './UsbExportWizard';
 import { buildContentRelativePath } from '../../utils/contentPaths';
-import { readJsonOrThrow } from '../../utils/api';
+import { getErrorMessage, readJsonOrThrow } from '../../utils/api';
 import { hasEnoughFreeSpace } from '../../utils/storage';
+import type { CopyOperationResult } from '../../types';
+
+const getResultStatusClasses = (status: CopyOperationResult['status']) => {
+  if (status === 'success') {
+    return 'bg-xbox-green/10 text-xbox-green';
+  }
+
+  if (status === 'skipped') {
+    return 'bg-yellow-500/10 text-yellow-500';
+  }
+
+  return 'bg-red-500/10 text-red-500';
+};
 
 export const StagingArea = () => {
   const { items, stagedIds, settings, removeFromStaging, clearStaging, setActiveTab, addToast } = useStore();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [results, setResults] = useState<any[] | null>(null);
+  const [results, setResults] = useState<CopyOperationResult[] | null>(null);
   const [freeSpace, setFreeSpace] = useState<number | null>(null);
   const [isCheckingSpace, setIsCheckingSpace] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'tree'>('list');
@@ -80,6 +93,11 @@ export const StagingArea = () => {
       return;
     }
 
+    if (!hasEnoughSpace) {
+      addToast('The configured output folder does not have enough free space', 'error');
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const res = await fetch('/api/staging/copy', {
@@ -87,22 +105,23 @@ export const StagingArea = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds: stagedIds, targetProfileId: settings.profileId })
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to stage content');
-      }
+      const data = await readJsonOrThrow<CopyOperationResult[]>(res, 'Failed to stage content');
 
       setResults(data);
-      const errorCount = data.filter((r: any) => r.status === 'error').length;
+      const successCount = data.filter((result) => result.status === 'success').length;
+      const skippedCount = data.filter((result) => result.status === 'skipped').length;
+      const errorCount = data.filter((result) => result.status === 'error').length;
+
       if (errorCount === 0) {
-        useStore.getState().addToast('Staging completed successfully', 'success');
+        const suffix = skippedCount > 0 ? ` (${skippedCount} skipped)` : '';
+        useStore.getState().addToast(`Quick stage copy completed: ${successCount} copied${suffix}`, 'success');
         clearStaging();
       } else {
-        useStore.getState().addToast(`Staging completed with ${errorCount} errors`, 'error');
+        useStore.getState().addToast(`Quick stage copy finished with ${errorCount} errors`, 'error');
       }
     } catch (err) {
       console.error("Staging failed", err);
-      useStore.getState().addToast(err instanceof Error ? err.message : 'Staging operation failed', 'error');
+      useStore.getState().addToast(getErrorMessage(err, 'Staging operation failed'), 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -204,12 +223,10 @@ export const StagingArea = () => {
                   {res.status === 'error' && <AlertCircle className="text-red-500" size={18} />}
                   <div>
                     <p className="text-sm font-medium">{res.fileName}</p>
-                    <p className="text-[10px] text-gray-500 truncate max-w-md">{res.dest}</p>
+                    <p className="text-[10px] text-gray-500 truncate max-w-md">{res.error || res.dest}</p>
                   </div>
                 </div>
-                <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${
-                  res.status === 'success' ? 'bg-xbox-green/10 text-xbox-green' : 'bg-gray-500/10 text-gray-400'
-                }`}>
+                <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${getResultStatusClasses(res.status)}`}>
                   {res.status}
                 </span>
               </div>

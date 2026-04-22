@@ -70,3 +70,25 @@ export interface ScanProgress {
   folder: string;
   isScanning: boolean;
 }
+
+export interface PathValidationResult {
+  exists: boolean;
+}
+
+export interface CopyOperationResult {
+  source: string;
+  dest: string;
+  fileName: string;
+  status: 'pending' | 'success' | 'skipped' | 'error';
+  error?: string;
+}
+
+export interface RepairOperationResult {
+  id: string;
+  originalPath: string;
+  newPath: string;
+  fileName: string;
+  newFileName: string;
+  status: 'pending' | 'success' | 'error';
+  error?: string;
+}

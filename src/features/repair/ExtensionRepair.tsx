@@ -4,15 +4,23 @@ import { Modal } from '../../components/ui/Modal';
 import { TitleIdService, TitleInfo } from '../../services/TitleIdService';
 import { AlertCircle, CheckCircle2, ArrowRight, Wrench, ShieldCheck, Loader2, Copy, Trash2, FileSearch, X, Hash, Edit2, Filter, Search, RefreshCw, PieChart as ChartIcon, User, AlertTriangle, Info, Zap, ChevronRight, ExternalLink } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { getErrorMessage, readJsonOrThrow } from '../../utils/api';
+import type { RepairOperationResult } from '../../types';
+import type { RenameOperation } from '../../services/RenameService';
+
+const getRepairSummary = (results: RepairOperationResult[]) => ({
+  successCount: results.filter((result) => result.status === 'success').length,
+  errorCount: results.filter((result) => result.status === 'error').length,
+});
 
 export const ExtensionRepair = () => {
   const { items, triggerScan, bulkDeleteItems, runIntegrityCheck, addToast } = useStore();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [repairResults, setRepairResults] = useState<any[] | null>(null);
+  const [repairResults, setRepairResults] = useState<RepairOperationResult[] | null>(null);
   const [activeTab, setActiveTab] = useState<'extensions' | 'duplicates' | 'integrity' | 'rename' | 'usage' | 'bulk' | 'lookup' | 'health'>('extensions');
   const [renameTemplate, setRenameTemplate] = useState('[TitleID] [GameName] - [Name]');
-  const [renamePreview, setRenamePreview] = useState<any[] | null>(null);
+  const [renamePreview, setRenamePreview] = useState<RenameOperation[] | null>(null);
   const [bulkData, setBulkData] = useState({ gameName: '', category: '' });
   const [lookupQuery, setLookupQuery] = useState('');
   const [lookupResults, setLookupResults] = useState<TitleInfo[]>([]);
@@ -67,19 +75,34 @@ export const ExtensionRepair = () => {
     setIsProcessing(true);
     
     try {
+      const idsToRepair = [...selectedIds];
       const res = await fetch('/api/repair/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemIds: selectedIds })
+        body: JSON.stringify({ itemIds: idsToRepair })
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<RepairOperationResult[]>(res, 'Failed to repair selected files');
       setRepairResults(data);
-      await triggerScan();
+
+      const { successCount, errorCount } = getRepairSummary(data);
+      if (successCount > 0) {
+        await triggerScan();
+      }
+
+      if (errorCount === 0) {
+        addToast(`Repaired ${successCount} file${successCount === 1 ? '' : 's'}`, 'success');
+      } else if (successCount > 0) {
+        addToast(`Repaired ${successCount} file${successCount === 1 ? '' : 's'}, ${errorCount} failed`, 'error');
+      } else {
+        addToast('Unable to repair the selected files', 'error');
+      }
+
+      setSelectedIds(data.filter((result) => result.status === 'error').map((result) => result.id));
     } catch (err) {
       console.error("Repair failed", err);
+      addToast(getErrorMessage(err, 'Repair failed'), 'error');
     } finally {
       setIsProcessing(false);
-      setSelectedIds([]);
     }
   };
 
@@ -319,6 +342,44 @@ export const ExtensionRepair = () => {
                   </tbody>
                 </table>
               </div>
+
+              {repairResults && (
+                <div className="bg-surface-card border border-surface-border rounded-2xl overflow-hidden">
+                  <div className="bg-surface-panel px-6 py-4 border-b border-surface-border flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-white">Repair Report</h4>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest">
+                        {getRepairSummary(repairResults).successCount} fixed • {getRepairSummary(repairResults).errorCount} failed
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setRepairResults(null)}
+                      className="text-xs font-bold text-gray-500 hover:text-white transition-colors"
+                    >
+                      Clear Report
+                    </button>
+                  </div>
+                  <div className="max-h-[320px] overflow-y-auto custom-scrollbar divide-y divide-surface-border/50">
+                    {repairResults.map((result) => (
+                      <div key={`${result.id}-${result.newPath}`} className="p-4 flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-xs font-mono text-white truncate">{result.fileName}</p>
+                          <p className="text-[10px] text-gray-500 font-mono truncate">
+                            {result.status === 'error' ? result.error || 'Unknown repair error' : result.newFileName}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 px-2 py-1 rounded text-[10px] font-black uppercase ${
+                          result.status === 'success'
+                            ? 'bg-xbox-green/10 text-xbox-green'
+                            : 'bg-red-500/10 text-red-500'
+                        }`}>
+                          {result.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

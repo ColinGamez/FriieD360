@@ -3,6 +3,8 @@ import { Folder, Plus, Trash2, HardDrive, RefreshCw, AlertTriangle, CheckCircle2
 import { useStore, ThemeID } from '../../store/useStore';
 import { Modal } from '../../components/ui/Modal';
 import { getAvailableProfileIds, getProfileLabel } from '../../utils/profiles';
+import { getErrorMessage, readJsonOrThrow } from '../../utils/api';
+import type { PathValidationResult } from '../../types';
 
 export const Settings = () => {
   const { settings, updateSettings, triggerScan, isScanning, fetchSettings, refreshInstalledStatus, theme, setTheme, items, collections, clearLibrary, addToast } = useStore();
@@ -21,30 +23,45 @@ export const Settings = () => {
   useEffect(() => { setOutputFolderDraft(settings.outputFolder); }, [settings.outputFolder]);
 
   const handleAddFolder = async () => {
-    if (!newPath) return;
+    const trimmedPath = newPath.trim();
+    if (!trimmedPath) {
+      setIsPathValid(false);
+      addToast('Enter a source folder path', 'error');
+      return;
+    }
 
-    if (settings.sourceFolders.includes(newPath)) {
+    if (settings.sourceFolders.includes(trimmedPath)) {
       setIsPathValid(false);
       addToast('That source folder is already added', 'info');
       return;
     }
-    
-    const res = await fetch('/api/settings/validate', {
+
+    try {
+      const res = await fetch('/api/settings/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: newPath })
-    });
-    const { exists } = await res.json();
+        body: JSON.stringify({ path: trimmedPath })
+      });
+      const { exists } = await readJsonOrThrow<PathValidationResult>(res, 'Unable to validate source folder');
 
-    if (exists) {
-        const updatedFolders = [...settings.sourceFolders, newPath];
+      if (!exists) {
+        setIsPathValid(false);
+        addToast('That path does not exist', 'error');
+        return;
+      }
+
+      const updatedFolders = [...settings.sourceFolders, trimmedPath];
         await updateSettings({ sourceFolders: updatedFolders });
+        if (!useStore.getState().settings.sourceFolders.includes(trimmedPath)) {
+          return;
+        }
+
         setNewPath('');
         setIsPathValid(null);
         addToast('Source folder added', 'success');
-    } else {
-        setIsPathValid(false);
-        addToast('That path does not exist', 'error');
+    } catch (error) {
+      setIsPathValid(false);
+      addToast(getErrorMessage(error, 'Unable to validate source folder'), 'error');
     }
   };
 
@@ -62,9 +79,19 @@ export const Settings = () => {
   };
 
   const handleSaveOutputFolder = async () => {
-    if (outputFolderDraft === settings.outputFolder) return;
-    await updateSettings({ outputFolder: outputFolderDraft.trim() });
-    addToast('Staging output updated', 'success');
+    const trimmedOutputFolder = outputFolderDraft.trim();
+    if (trimmedOutputFolder === settings.outputFolder) {
+      setOutputFolderDraft(trimmedOutputFolder);
+      return;
+    }
+
+    await updateSettings({ outputFolder: trimmedOutputFolder });
+
+    const savedOutputFolder = useStore.getState().settings.outputFolder;
+    setOutputFolderDraft(savedOutputFolder);
+    if (savedOutputFolder === trimmedOutputFolder) {
+      addToast('Staging output updated', 'success');
+    }
   };
 
   return (
