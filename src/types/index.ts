@@ -73,6 +73,7 @@ export interface ScanProgress {
 
 export interface PathValidationResult {
   exists: boolean;
+  isDirectory: boolean;
 }
 
 export interface CopyOperationResult {

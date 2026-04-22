@@ -22,6 +22,15 @@ export const Settings = () => {
   useEffect(() => { fetchSettings(); }, []);
   useEffect(() => { setOutputFolderDraft(settings.outputFolder); }, [settings.outputFolder]);
 
+  const validatePath = async (candidatePath: string) => {
+    const res = await fetch('/api/settings/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: candidatePath })
+    });
+    return readJsonOrThrow<PathValidationResult>(res, 'Unable to validate path');
+  };
+
   const handleAddFolder = async () => {
     const trimmedPath = newPath.trim();
     if (!trimmedPath) {
@@ -37,16 +46,17 @@ export const Settings = () => {
     }
 
     try {
-      const res = await fetch('/api/settings/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: trimmedPath })
-      });
-      const { exists } = await readJsonOrThrow<PathValidationResult>(res, 'Unable to validate source folder');
+      const { exists, isDirectory } = await validatePath(trimmedPath);
 
       if (!exists) {
         setIsPathValid(false);
         addToast('That path does not exist', 'error');
+        return;
+      }
+
+      if (!isDirectory) {
+        setIsPathValid(false);
+        addToast('Source folders must point to a directory, not a file', 'error');
         return;
       }
 
@@ -72,10 +82,20 @@ export const Settings = () => {
   };
 
   const handleCheckInstalled = async () => {
-    if (installedPath) {
-      const count = await refreshInstalledStatus(installedPath);
-      addToast(`Installed-content scan matched ${count} packages`, 'success');
+    const trimmedInstalledPath = installedPath.trim();
+    if (!trimmedInstalledPath) return;
+
+    const count = await refreshInstalledStatus(trimmedInstalledPath);
+    if (count === null) {
+      return;
     }
+
+    addToast(
+      count > 0
+        ? `Installed-content scan matched ${count} packages`
+        : 'Installed-content scan completed with no matches',
+      count > 0 ? 'success' : 'info',
+    );
   };
 
   const handleSaveOutputFolder = async () => {
@@ -83,6 +103,21 @@ export const Settings = () => {
     if (trimmedOutputFolder === settings.outputFolder) {
       setOutputFolderDraft(trimmedOutputFolder);
       return;
+    }
+
+    if (trimmedOutputFolder) {
+      try {
+        const { exists, isDirectory } = await validatePath(trimmedOutputFolder);
+        if (exists && !isDirectory) {
+          addToast('Staging output must be a folder path, not a file', 'error');
+          setOutputFolderDraft(settings.outputFolder);
+          return;
+        }
+      } catch (error) {
+        addToast(getErrorMessage(error, 'Unable to validate staging output path'), 'error');
+        setOutputFolderDraft(settings.outputFolder);
+        return;
+      }
     }
 
     await updateSettings({ outputFolder: trimmedOutputFolder });

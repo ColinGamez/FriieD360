@@ -32,6 +32,11 @@ interface DbState {
   logs: any[];
 }
 
+interface PathValidationState {
+  exists: boolean;
+  isDirectory: boolean;
+}
+
 let dbQueue: Promise<unknown> = Promise.resolve();
 
 function createInitialDb(): DbState {
@@ -123,6 +128,27 @@ function removeItemReferences(db: DbState, itemIds: string[]) {
 function normalizeFilePath(filePath: string) {
   const resolved = path.resolve(filePath);
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+async function getPathValidationState(candidatePath: unknown): Promise<PathValidationState> {
+  if (typeof candidatePath !== 'string' || candidatePath.trim().length === 0) {
+    return { exists: false, isDirectory: false };
+  }
+
+  const normalizedPath = candidatePath.trim();
+  if (!(await fs.pathExists(normalizedPath))) {
+    return { exists: false, isDirectory: false };
+  }
+
+  try {
+    const stat = await fs.stat(normalizedPath);
+    return {
+      exists: true,
+      isDirectory: stat.isDirectory(),
+    };
+  } catch {
+    return { exists: true, isDirectory: false };
+  }
 }
 
 function isWithinPath(parentPath: string, childPath: string) {
@@ -257,17 +283,22 @@ async function startServer() {
   });
 
   app.post('/api/settings/validate', async (req, res) => {
-    const candidatePath = req.body?.path;
-    const exists = typeof candidatePath === 'string' && candidatePath.length > 0
-      ? await fs.pathExists(candidatePath)
-      : false;
-    res.json({ exists });
+    const validation = await getPathValidationState(req.body?.path);
+    res.json(validation);
   });
 
   app.post('/api/repair/apply', async (req, res) => {
     const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
+    if (itemIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one item to repair' });
+    }
+
     const db = await getDb();
     const itemsToRepair = db.items.filter((item: any) => itemIds.includes(item.id));
+    if (itemsToRepair.length === 0) {
+      return res.status(404).json({ error: 'No matching items found for repair' });
+    }
+
     const ops = await RepairService.preview(itemsToRepair);
     const results = await RepairService.apply(ops);
 
@@ -298,6 +329,10 @@ async function startServer() {
 
   app.post('/api/staging/copy', async (req, res) => {
     const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
+    if (itemIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one item to stage' });
+    }
+
     const targetProfileId = typeof req.body?.targetProfileId === 'string'
       ? req.body.targetProfileId
       : undefined;
@@ -306,7 +341,16 @@ async function startServer() {
       return res.status(400).json({ error: 'Output folder not configured' });
     }
 
+    const outputFolderState = await getPathValidationState(db.settings.outputFolder);
+    if (outputFolderState.exists && !outputFolderState.isDirectory) {
+      return res.status(400).json({ error: 'Configured output path points to a file, not a folder' });
+    }
+
     const itemsToStage = db.items.filter((item: any) => itemIds.includes(item.id));
+    if (itemsToStage.length === 0) {
+      return res.status(404).json({ error: 'No matching items found for staging' });
+    }
+
     const ops = await StagingService.prepareOperations(itemsToStage, db.settings.outputFolder, { contentOwnerId: targetProfileId });
     const results = await StagingService.execute(ops);
 
@@ -506,15 +550,27 @@ async function startServer() {
 
   app.post('/api/library/rename/preview', async (req, res) => {
     const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
+    if (itemIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one item to preview rename operations' });
+    }
+
     const template = req.body?.template || '[Name]';
     const db = await getDb();
     const itemsToRename = db.items.filter((item: any) => itemIds.includes(item.id));
+    if (itemsToRename.length === 0) {
+      return res.status(404).json({ error: 'No matching items found for rename preview' });
+    }
+
     const ops = await RenameService.preview(itemsToRename, template);
     res.json(ops);
   });
 
   app.post('/api/library/rename/apply', async (req, res) => {
     const operations = Array.isArray(req.body?.operations) ? req.body.operations : [];
+    if (operations.length === 0) {
+      return res.status(400).json({ error: 'No rename operations provided' });
+    }
+
     const results = await RenameService.apply(operations);
     const updatedStats = new Map<string, { parentFolder: string; extension: string; dateModified?: string }>();
 
@@ -596,8 +652,16 @@ async function startServer() {
 
   app.post('/api/library/organize', async (req, res) => {
     const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
+    if (itemIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one item to organize' });
+    }
+
     const db = await getDb();
     const itemsToOrganize = db.items.filter((item: any) => itemIds.includes(item.id));
+    if (itemsToOrganize.length === 0) {
+      return res.status(404).json({ error: 'No matching items found to organize' });
+    }
+
     const sourceFolders = db.settings.sourceFolders || [];
     const results: any[] = [];
 
@@ -742,6 +806,10 @@ async function startServer() {
 
   app.post('/api/export/usb', async (req, res) => {
     const itemIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
+    if (itemIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one item to export' });
+    }
+
     const usbPath = req.body?.usbPath;
     const targetProfileId = typeof req.body?.targetProfileId === 'string'
       ? req.body.targetProfileId
@@ -751,7 +819,17 @@ async function startServer() {
       return res.status(400).json({ error: 'USB target path is required' });
     }
 
+    const usbPathState = await getPathValidationState(usbPath);
+    if (!usbPathState.exists || !usbPathState.isDirectory) {
+      return res.status(400).json({ error: 'USB target path must point to an existing folder' });
+    }
+
     const db = await getDb();
+    const itemsToExport = db.items.filter((item: any) => itemIds.includes(item.id));
+    if (itemsToExport.length === 0) {
+      return res.status(404).json({ error: 'No matching items found for export' });
+    }
+
     const summary = await ExportService.exportToUsb(itemIds, usbPath, db.items, { contentOwnerId: targetProfileId });
 
     await mutateDb((nextDb) => {
@@ -767,6 +845,11 @@ async function startServer() {
 
   app.post('/api/library/check-installed', async (req, res) => {
     const drivePath = req.body?.drivePath;
+    const drivePathState = await getPathValidationState(drivePath);
+    if (!drivePathState.exists || !drivePathState.isDirectory) {
+      return res.status(400).json({ error: 'Drive path must point to an existing folder' });
+    }
+
     try {
       const installedSet = await InstalledContentService.scanInstalled(drivePath);
       res.json(Array.from(installedSet));

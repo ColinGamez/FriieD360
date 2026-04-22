@@ -48,7 +48,7 @@ interface AppState {
   addToStaging: (id: string) => void;
   removeFromStaging: (id: string) => void;
   clearStaging: () => void;
-  refreshInstalledStatus: (drivePath: string) => Promise<number>;
+  refreshInstalledStatus: (drivePath: string) => Promise<number | null>;
   updateMetadata: (itemId: string, metadata: any) => Promise<void>;
   bulkUpdateMetadata: (itemIds: string[], metadata: any) => Promise<void>;
   bulkDeleteItems: (itemIds: string[]) => Promise<void>;
@@ -326,7 +326,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       console.error('Failed to refresh installed status', err);
       get().addToast(getErrorMessage(err, 'Failed to scan installed content'), 'error');
-      return 0;
+      return null;
     }
   },
 
