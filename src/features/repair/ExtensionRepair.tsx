@@ -111,7 +111,10 @@ export const ExtensionRepair = () => {
 
     try {
       setIsProcessing(true);
-      await applyRename(renamePreview);
+      const renamed = await applyRename(renamePreview);
+      if (!renamed) {
+        return;
+      }
       setRenamePreview(null);
       setShowRenameConfirmModal(false);
       addToast(`Renamed ${renamePreview.length} files`, 'success');

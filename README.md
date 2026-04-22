@@ -1,63 +1,78 @@
 # FriieD360 Studio
 
-A modern, local-first Xbox 360 content manager for avatar items and themes.
+FriieD360 Studio is a local-first Xbox 360 content manager for scanning, organizing, staging, and exporting Xbox 360 packages from your own drives. It runs entirely on your machine and keeps its working state in local files.
 
-## Features
+## What It Handles
 
-- **Local-First Scanning**: Recursively scan your local folders for Xbox 360 content.
-- **Extension Repair**: Automatically detect and fix extensionless files (adds `.CON`).
-- **Installed Detection**: Point to your Xbox HDD/USB to see which items are already installed.
-- **Staging System**: Organize items into the standard Xbox 360 folder structure (`Content/0000000000000000/...`).
-- **USB Export**: One-click deployment to removable drives.
-- **Collections**: Group your items into custom curated sets.
+- Avatar items
+- Themes
+- Gamerpics
+- DLC, demos, and title updates
+- XBLA and GOD packages
+- Profile-linked content owners for staging and USB export
 
-## Getting Started
+## Current Highlights
 
-### Prerequisites
+- Recursive local scanning with optional startup scans
+- Extension repair for extensionless `.CON` content
+- Metadata lookup, custom Title ID mappings, and profile mappings
+- Installed-content detection against Xbox HDD or USB roots
+- Smart collections and custom collections
+- Batch rename, duplicate cleanup, integrity checks, and library organization
+- Staging previews with Xbox 360 content-path layout
+- Quick stage copy, export wizard, and one-click USB export
+- Local activity history and dashboard health views
 
-- [Node.js](https://nodejs.org/) (v18 or higher recommended)
-- [npm](https://www.npmjs.com/)
+## Requirements
 
-### Installation
+- Node.js 18 or newer
+- npm
+- Windows is the primary supported environment for drive detection and free-space checks
 
-1. Clone the repository:
+## Setup
+
+1. Clone the repository.
    ```bash
    git clone https://github.com/your-username/friied-360-studio.git
    cd friied-360-studio
    ```
-
-2. Install dependencies:
+2. Install dependencies.
    ```bash
    npm install
    ```
-
-3. Start the development server:
+3. Start the app in development mode.
    ```bash
    npm run dev
    ```
+4. Open `http://localhost:3000`.
 
-4. Open your browser to `http://localhost:3000`.
+## Scripts
 
-### Production Preview
+- `npm run dev`
+  Starts the Express + Vite development server through `tsx`.
+- `npm run build`
+  Builds the frontend into `dist/`.
+- `npm start`
+  Starts the production server with the built frontend.
+- `npm run clean`
+  Removes the `dist/` folder.
+- `npm run lint`
+  Runs TypeScript type-checking with `tsc --noEmit`.
 
-1. Build the app:
-   ```bash
-   npm run build
-   ```
+## Typical Workflow
 
-2. Start the production server:
-   ```bash
-   npm start
-   ```
+1. Open **Settings** and add one or more source folders.
+2. Run **Scan Now** or use the dashboard/library scan actions.
+3. Review content in the library views, game hubs, and collections.
+4. Fix issues in **Maintenance** if you have missing metadata, duplicates, or extensionless files.
+5. Add content to **Staging Area** or export directly through **USB Export**.
+6. Choose the correct content owner for profile-scoped packages before staging or USB deployment.
 
-## Usage
+## Notes
 
-1. **Settings**: Add your source folders, theme, and custom Title ID/profile mappings.
-2. **Scan**: Click "Scan Now" to index your library.
-3. **Library**: Browse games, DLC, themes, avatar items, and gamerpics.
-4. **Collections**: Create curated sets and smart collections.
-5. **Maintenance**: Repair extensions, resolve duplicate entries, batch rename, and organize content paths.
-6. **Stage / Export**: Add items to the staging queue and deploy them to a removable drive.
+- The app is local-first and does not require a cloud backend.
+- `db.json` stores indexed library state, settings, collections, and recent activity locally.
+- Production mode expects a built `dist/` folder, so run `npm run build` before `npm start`.
 
 ## License
 

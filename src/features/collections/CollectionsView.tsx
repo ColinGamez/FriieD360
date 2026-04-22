@@ -72,7 +72,12 @@ export const CollectionsView = () => {
       return;
     }
 
-    await upsertCollection({ name: trimmedName, itemIds: [], description: '' });
+    const created = await upsertCollection(
+      { name: trimmedName, itemIds: [], description: '' },
+      { successMessage: `Created "${trimmedName}"` },
+    );
+    if (!created) return;
+
     setNewCollectionName('');
     setIsCreateModalOpen(false);
   };
@@ -87,14 +92,28 @@ export const CollectionsView = () => {
       return;
     }
 
-    await upsertCollection({ ...collection, name: trimmedName });
+    const renamed = await upsertCollection(
+      { ...collection, name: trimmedName },
+      {
+        successMessage: `Renamed collection to "${trimmedName}"`,
+        errorMessage: `Failed to rename "${collection.name}"`,
+      },
+    );
+    if (!renamed) return;
+
     setRenameCollectionId(null);
     setRenameCollectionName('');
   };
 
   const handleDeleteCollection = async () => {
     if (!deleteCollectionId) return;
-    await deleteCollection(deleteCollectionId);
+    const collection = collections.find((entry) => entry.id === deleteCollectionId);
+    const deleted = await deleteCollection(deleteCollectionId, {
+      successMessage: collection ? `Deleted "${collection.name}"` : 'Collection deleted',
+      errorMessage: collection ? `Failed to delete "${collection.name}"` : 'Failed to delete collection',
+    });
+    if (!deleted) return;
+
     if (activeCollectionId === deleteCollectionId) setActiveCollectionId(null);
     setDeleteCollectionId(null);
   };
@@ -253,9 +272,15 @@ export const CollectionsView = () => {
                           />
                           {activeCollection && (
                             <button 
-                              onClick={() => {
+                              onClick={async () => {
                                 const updatedIds = activeCollection.itemIds.filter(id => id !== item.id);
-                                upsertCollection({ ...activeCollection, itemIds: updatedIds });
+                                await upsertCollection(
+                                  { ...activeCollection, itemIds: updatedIds },
+                                  {
+                                    successMessage: `Removed "${item.name}" from ${activeCollection.name}`,
+                                    errorMessage: `Failed to update ${activeCollection.name}`,
+                                  },
+                                );
                               }}
                               className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
                               title="Remove from collection"
@@ -326,10 +351,17 @@ export const CollectionsView = () => {
               Cancel
             </button>
             <button 
-              onClick={() => {
+              onClick={async () => {
                 const collection = collections.find(c => c.id === confirmClearId);
                 if (collection) {
-                  upsertCollection({ ...collection, itemIds: [] });
+                  const cleared = await upsertCollection(
+                    { ...collection, itemIds: [] },
+                    {
+                      successMessage: `Cleared "${collection.name}"`,
+                      errorMessage: `Failed to clear "${collection.name}"`,
+                    },
+                  );
+                  if (!cleared) return;
                 }
                 setConfirmClearId(null);
               }}

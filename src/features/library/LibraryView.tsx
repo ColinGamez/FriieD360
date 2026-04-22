@@ -117,7 +117,11 @@ export const LibraryView = ({ title, types }: LibraryViewProps) => {
   const handleApplyRename = async () => {
     if (renameOperations.length === 0) return;
     setIsProcessing(true);
-    await useStore.getState().applyRename(renameOperations);
+    const renamed = await useStore.getState().applyRename(renameOperations);
+    if (!renamed) {
+      setIsProcessing(false);
+      return;
+    }
     setIsRenaming(false);
     setRenameOperations([]);
     setSelectedIds([]);

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { ContentItem, AppSettings, Collection, ViewID, ScanProgress, AppTheme } from '../types';
 import { nanoid } from 'nanoid';
 import { getErrorMessage, readJsonOrThrow } from '../utils/api';
+import type { RenameOperation } from '../services/RenameService';
 
 export type ThemeID = AppTheme;
 
@@ -9,6 +10,12 @@ export interface Toast {
   id: string;
   message: string;
   type: 'success' | 'error' | 'info';
+}
+
+interface CollectionMutationOptions {
+  successMessage?: string;
+  errorMessage?: string;
+  skipSuccessToast?: boolean;
 }
 
 interface AppState {
@@ -35,8 +42,8 @@ interface AppState {
   updateSettings: (newSettings: Partial<AppSettings>) => Promise<void>;
   triggerScan: (deep?: boolean) => Promise<void>;
   toggleFavorite: (itemId: string) => Promise<void>;
-  upsertCollection: (collection: Partial<Collection>) => Promise<void>;
-  deleteCollection: (id: string) => Promise<void>;
+  upsertCollection: (collection: Partial<Collection>, options?: CollectionMutationOptions) => Promise<boolean>;
+  deleteCollection: (id: string, options?: CollectionMutationOptions) => Promise<boolean>;
   addItemToCollection: (collectionId: string, itemId: string) => Promise<void>;
   addToStaging: (id: string) => void;
   removeFromStaging: (id: string) => void;
@@ -47,8 +54,8 @@ interface AppState {
   bulkDeleteItems: (itemIds: string[]) => Promise<void>;
   clearLibrary: () => Promise<void>;
   runIntegrityCheck: () => Promise<{ removedCount: number }>;
-  previewRename: (itemIds: string[], template: string) => Promise<any[]>;
-  applyRename: (operations: any[]) => Promise<void>;
+  previewRename: (itemIds: string[], template: string) => Promise<RenameOperation[]>;
+  applyRename: (operations: RenameOperation[]) => Promise<boolean>;
   bulkAutoFixMetadata: (itemIds: string[]) => Promise<void>;
   fetchOnlineMetadata: (itemIds: string[]) => Promise<number>;
   resolveDuplicates: (strategy: 'keep_newest' | 'keep_oldest' | 'keep_shortest_path') => Promise<number>;
@@ -224,35 +231,43 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  upsertCollection: async (collection) => {
+  upsertCollection: async (collection, options = {}) => {
     try {
       const res = await fetch('/api/collections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(collection)
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<Collection[]>(res, 'Failed to save collection');
       set({ collections: data });
-      get().addToast(`Collection ${collection.id ? 'updated' : 'created'}`, 'success');
+      if (!options.skipSuccessToast) {
+        get().addToast(options.successMessage || `Collection ${collection.id ? 'updated' : 'created'}`, 'success');
+      }
+      return true;
     } catch (err) {
       console.error('Failed to upsert collection', err);
-      get().addToast('Failed to save collection', 'error');
+      get().addToast(options.errorMessage || getErrorMessage(err, 'Failed to save collection'), 'error');
+      return false;
     }
   },
 
-  deleteCollection: async (id) => {
+  deleteCollection: async (id, options = {}) => {
     try {
       const res = await fetch('/api/collections/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
       });
-      const data = await res.json();
+      const data = await readJsonOrThrow<Collection[]>(res, 'Failed to delete collection');
       set({ collections: data });
-      get().addToast('Collection deleted', 'success');
+      if (!options.skipSuccessToast) {
+        get().addToast(options.successMessage || 'Collection deleted', 'success');
+      }
+      return true;
     } catch (err) {
       console.error('Failed to delete collection', err);
-      get().addToast('Failed to delete collection', 'error');
+      get().addToast(options.errorMessage || getErrorMessage(err, 'Failed to delete collection'), 'error');
+      return false;
     }
   },
 
@@ -267,8 +282,17 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     const updatedItemIds = [...collection.itemIds, itemId];
-    await state.upsertCollection({ ...collection, itemIds: updatedItemIds });
-    get().addToast(`Added to ${collection.name}`, 'success');
+    const saved = await state.upsertCollection(
+      { ...collection, itemIds: updatedItemIds },
+      {
+        skipSuccessToast: true,
+        errorMessage: `Failed to add item to ${collection.name}`,
+      },
+    );
+
+    if (saved) {
+      get().addToast(`Added to ${collection.name}`, 'success');
+    }
   },
 
   addToStaging: (id) => {
@@ -406,26 +430,27 @@ export const useStore = create<AppState>((set, get) => ({
   clearLibrary: async () => {
     try {
       const res = await fetch('/api/library/clear', { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to clear library');
+      await readJsonOrThrow<{ success: boolean }>(res, 'Failed to clear library');
       set({ items: [], stagedIds: [], installedHeuristics: [] });
       await get().fetchCollections();
       get().addToast('Library database cleared', 'success');
     } catch (err) {
       console.error('Failed to clear library', err);
-      get().addToast('Failed to clear library database', 'error');
+      get().addToast(getErrorMessage(err, 'Failed to clear library database'), 'error');
     }
   },
 
   runIntegrityCheck: async () => {
     try {
       const res = await fetch('/api/library/integrity-check', { method: 'POST' });
-      const data = await res.json();
+      const data = await readJsonOrThrow<{ success: boolean; removedCount: number }>(res, 'Integrity check failed');
       if (data.success && data.removedCount > 0) {
         await get().fetchItems();
       }
       return { removedCount: data.removedCount };
     } catch (err) {
       console.error('Integrity check failed', err);
+      get().addToast(getErrorMessage(err, 'Integrity check failed'), 'error');
       return { removedCount: 0 };
     }
   },
@@ -436,17 +461,23 @@ export const useStore = create<AppState>((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemIds, template })
     });
-    return await res.json();
+    return readJsonOrThrow<RenameOperation[]>(res, 'Failed to preview rename');
   },
 
   applyRename: async (operations) => {
-    const res = await fetch('/api/library/rename/apply', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ operations })
-    });
-    if (res.ok) {
+    try {
+      const res = await fetch('/api/library/rename/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operations })
+      });
+      await readJsonOrThrow<RenameOperation[]>(res, 'Failed to rename files');
       await get().fetchItems();
+      return true;
+    } catch (err) {
+      console.error('Failed to apply rename operations', err);
+      get().addToast(getErrorMessage(err, 'Failed to rename files'), 'error');
+      return false;
     }
   },
 
