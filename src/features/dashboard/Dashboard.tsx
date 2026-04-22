@@ -124,16 +124,40 @@ export const Dashboard = () => {
   const favoriteCount = items.filter(i => i.isFavorite).length;
   const repairNeeded = items.filter(i => i.isExtensionless).length;
   const unknownTitles = items.filter(i => i.metadata.gameName === 'Unknown Game').length;
-  const healthyItems = items.length - unknownTitles - repairNeeded;
+  const healthData = React.useMemo(() => {
+    const buckets = {
+      healthy: 0,
+      metadata: 0,
+      repair: 0,
+      both: 0,
+    };
+
+    items.forEach((item) => {
+      const needsMetadata = item.metadata.gameName === 'Unknown Game';
+      const needsRepair = item.isExtensionless;
+
+      if (needsMetadata && needsRepair) {
+        buckets.both += 1;
+      } else if (needsMetadata) {
+        buckets.metadata += 1;
+      } else if (needsRepair) {
+        buckets.repair += 1;
+      } else {
+        buckets.healthy += 1;
+      }
+    });
+
+    return [
+      { name: 'Healthy', value: buckets.healthy, color: '#107C10' },
+      { name: 'Metadata', value: buckets.metadata, color: '#D83B01' },
+      { name: 'Repair', value: buckets.repair, color: '#E81123' },
+      { name: 'Both', value: buckets.both, color: '#FFB900' },
+    ];
+  }, [items]);
+  const healthyItems = healthData.find((entry) => entry.name === 'Healthy')?.value || 0;
   const healthPercentage = Math.round((healthyItems / (items.length || 1)) * 100);
   const hasSourceFolders = settings.sourceFolders.length > 0;
   const recentLogs = React.useMemo(() => logs.slice(0, 6), [logs]);
-
-  const healthData = [
-    { name: 'Healthy', value: healthyItems, color: '#107C10' },
-    { name: 'Unknown', value: unknownTitles, color: '#D83B01' },
-    { name: 'Repair', value: repairNeeded, color: '#E81123' },
-  ];
 
   const [selectedFranchise, setSelectedFranchise] = React.useState<string | null>(null);
 

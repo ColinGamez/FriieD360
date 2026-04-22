@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Folder, Plus, Trash2, HardDrive, RefreshCw, AlertTriangle, CheckCircle2, Usb, Wrench, Hash, Tag, Palette, Monitor, Zap, Moon, UserCircle } from 'lucide-react';
 import { useStore, ThemeID } from '../../store/useStore';
 import { Modal } from '../../components/ui/Modal';
+import { getAvailableProfileIds, getProfileLabel } from '../../utils/profiles';
 
 export const Settings = () => {
   const { settings, updateSettings, triggerScan, isScanning, fetchSettings, refreshInstalledStatus, theme, setTheme, items, collections, clearLibrary, addToast } = useStore();
@@ -14,14 +15,7 @@ export const Settings = () => {
   const [profileName, setProfileName] = useState('');
   const [outputFolderDraft, setOutputFolderDraft] = useState(settings.outputFolder);
   const [showClearLibraryModal, setShowClearLibraryModal] = useState(false);
-  const availableProfileIds = Array.from(new Set([
-    '0000000000000000',
-    settings.profileId || '0000000000000000',
-    ...Object.keys(settings.profileMappings || {}),
-    ...items
-      .map((item) => item.metadata.technical?.profileId)
-      .filter((id): id is string => Boolean(id) && id !== '0000000000000000'),
-  ])).filter(Boolean);
+  const availableProfileIds = getAvailableProfileIds(settings, items);
 
   useEffect(() => { fetchSettings(); }, []);
   useEffect(() => { setOutputFolderDraft(settings.outputFolder); }, [settings.outputFolder]);
@@ -293,9 +287,7 @@ export const Settings = () => {
             >
               {availableProfileIds.map((id) => (
                 <option key={id} value={id}>
-                  {id === '0000000000000000'
-                    ? 'Global / All Profiles'
-                    : `${settings.profileMappings?.[id] || 'Xbox Profile'} (${id})`}
+                  {getProfileLabel(id, settings.profileMappings)}
                 </option>
               ))}
             </select>

@@ -4,12 +4,15 @@ import { PackageCheck, ArrowRight, Trash2, Play, CheckCircle, AlertCircle, Copy,
 import { FolderTreePreview } from './FolderTreePreview';
 import { UsbExportWizard } from './UsbExportWizard';
 import { buildContentRelativePath } from '../../utils/contentPaths';
+import { readJsonOrThrow } from '../../utils/api';
+import { hasEnoughFreeSpace } from '../../utils/storage';
 
 export const StagingArea = () => {
   const { items, stagedIds, settings, removeFromStaging, clearStaging, setActiveTab, addToast } = useStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<any[] | null>(null);
   const [freeSpace, setFreeSpace] = useState<number | null>(null);
+  const [isCheckingSpace, setIsCheckingSpace] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'tree'>('list');
   const [showWizard, setShowWizard] = useState(false);
 
@@ -27,12 +30,37 @@ export const StagingArea = () => {
   const totalSize = useMemo(() => stagedItems.reduce((acc, i) => acc + i.size, 0), [stagedItems]);
 
   useEffect(() => {
-    if (settings?.outputFolder) {
-      fetch(`/api/system/free-space?path=${encodeURIComponent(settings.outputFolder)}`)
-        .then(res => res.json())
-        .then(data => setFreeSpace(data.free))
-        .catch(err => console.error("Failed to check free space", err));
+    if (!settings?.outputFolder) {
+      setFreeSpace(null);
+      setIsCheckingSpace(false);
+      return;
     }
+
+    let cancelled = false;
+    setIsCheckingSpace(true);
+
+    fetch(`/api/system/free-space?path=${encodeURIComponent(settings.outputFolder)}`)
+      .then((res) => readJsonOrThrow<{ free: number | null }>(res, 'Failed to check available space'))
+      .then((data) => {
+        if (!cancelled) {
+          setFreeSpace(typeof data.free === 'number' ? data.free : null);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          console.error("Failed to check free space", err);
+          setFreeSpace(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsCheckingSpace(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [settings?.outputFolder]);
 
   const formatSize = (bytes: number) => {
@@ -43,7 +71,7 @@ export const StagingArea = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const hasEnoughSpace = freeSpace === null || freeSpace > totalSize;
+  const hasEnoughSpace = hasEnoughFreeSpace(freeSpace, totalSize);
 
   const handleExecute = async () => {
     if (!settings.outputFolder) {
@@ -135,7 +163,7 @@ export const StagingArea = () => {
             <div>
               <p className="text-xs font-bold">Target: {settings.outputFolder}</p>
               <p className="text-[10px] opacity-70">
-                {freeSpace !== null ? `${formatSize(freeSpace)} free available` : 'Checking free space...'}
+                {isCheckingSpace ? 'Checking free space...' : freeSpace !== null ? `${formatSize(freeSpace)} free available` : 'Free-space check unavailable'}
               </p>
             </div>
           </div>

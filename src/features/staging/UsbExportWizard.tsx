@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, ChevronRight, ChevronLeft, HardDrive, User, Package, ShieldCheck, AlertCircle, CheckCircle2, Play, Save, Info } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { motion, AnimatePresence } from 'motion/react';
+import { readJsonOrThrow } from '../../utils/api';
+import { getAvailableProfileIds, getProfileLabel } from '../../utils/profiles';
+import { getStorageUsagePercent, hasEnoughFreeSpace } from '../../utils/storage';
 
 interface UsbExportWizardProps {
   onClose: () => void;
@@ -9,11 +12,16 @@ interface UsbExportWizardProps {
 
 type Step = 'review' | 'profiles' | 'target' | 'execute';
 
+interface CopyResult {
+  fileName: string;
+  status: 'success' | 'skipped' | 'error';
+}
+
 export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
   const { items, stagedIds, settings, updateSettings, clearStaging, addToast, setActiveTab } = useStore();
   const [currentStep, setCurrentStep] = useState<Step>('review');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [results, setResults] = useState<any[] | null>(null);
+  const [results, setResults] = useState<CopyResult[] | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string>(settings.profileId || '0000000000000000');
   const [freeSpace, setFreeSpace] = useState<number | null>(null);
   const [isCheckingSpace, setIsCheckingSpace] = useState(false);
@@ -23,16 +31,13 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
   const resultSummary = useMemo(() => {
     if (!results) return null;
     return {
-      success: results.filter((result: any) => result.status === 'success').length,
-      skipped: results.filter((result: any) => result.status === 'skipped').length,
-      error: results.filter((result: any) => result.status === 'error').length,
+      success: results.filter((result) => result.status === 'success').length,
+      skipped: results.filter((result) => result.status === 'skipped').length,
+      error: results.filter((result) => result.status === 'error').length,
     };
   }, [results]);
 
-  const profileIds = useMemo(() => {
-    const ids = new Set(items.map(i => i.metadata.technical?.profileId).filter(id => id && id !== '0000000000000000'));
-    return ['0000000000000000', ...Array.from(ids)];
-  }, [items]);
+  const profileIds = useMemo(() => getAvailableProfileIds(settings, items), [items, settings]);
 
   const formatSize = (bytes: number) => {
     const k = 1024;
@@ -54,7 +59,7 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
       setIsCheckingSpace(true);
       try {
         const res = await fetch(`/api/system/free-space?path=${encodeURIComponent(settings.outputFolder)}`);
-        const data = await res.json();
+        const data = await readJsonOrThrow<{ free: number | null }>(res, 'Failed to check available space');
         if (!cancelled) {
           setFreeSpace(typeof data.free === 'number' ? data.free : null);
         }
@@ -76,10 +81,8 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
     };
   }, [settings.outputFolder]);
 
-  const hasEnoughSpace = freeSpace === null || freeSpace > totalSize;
-  const requiredPercent = freeSpace && freeSpace > 0
-    ? Math.min(100, Math.round((totalSize / freeSpace) * 100))
-    : 0;
+  const hasEnoughSpace = hasEnoughFreeSpace(freeSpace, totalSize);
+  const requiredPercent = getStorageUsagePercent(freeSpace, totalSize);
 
   const handleExecute = async () => {
     if (!settings.outputFolder || !hasEnoughSpace) return;
@@ -98,13 +101,10 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
           targetProfileId: selectedProfileId
         })
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to export staged content');
-      }
+      const data = await readJsonOrThrow<CopyResult[]>(res, 'Failed to export staged content');
 
       setResults(data);
-      const errorCount = data.filter((r: any) => r.status === 'error').length;
+      const errorCount = data.filter((r) => r.status === 'error').length;
       if (errorCount === 0) {
         addToast('Export completed successfully', 'success');
         clearStaging();
@@ -235,7 +235,7 @@ export const UsbExportWizard = ({ onClose }: UsbExportWizardProps) => {
                         <User size={24} />
                       </div>
                       <div>
-                        <p className="text-sm font-black text-white">{id === '0000000000000000' ? 'Global / All Profiles' : 'Xbox 360 Profile'}</p>
+                        <p className="text-sm font-black text-white">{getProfileLabel(id, settings.profileMappings)}</p>
                         <p className="text-[10px] font-mono text-gray-500 mt-1">{id}</p>
                       </div>
                     </button>

@@ -1,30 +1,37 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../store/useStore';
 import { Usb, HardDrive, ArrowRight, Play, CheckCircle2, AlertCircle, Loader2, RefreshCw, User } from 'lucide-react';
+import { readJsonOrThrow } from '../../utils/api';
+import { getAvailableProfileIds, getProfileLabel } from '../../utils/profiles';
+import { hasEnoughFreeSpace } from '../../utils/storage';
+
+interface DriveInfo {
+  id: string;
+  label: string;
+  freeSpace: number | null;
+}
+
+interface ExportSummary {
+  success: number;
+  skipped: number;
+  error: number;
+}
 
 export const UsbExport = () => {
   const { stagedIds, items, clearStaging, settings, addToast, updateSettings } = useStore();
-  const [drives, setDrives] = useState<any[]>([]);
+  const [drives, setDrives] = useState<DriveInfo[]>([]);
   const [selectedDrive, setSelectedDrive] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [summary, setSummary] = useState<any>(null);
+  const [summary, setSummary] = useState<ExportSummary | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState(settings.profileId || '0000000000000000');
-  const availableProfileIds = Array.from(new Set([
-    '0000000000000000',
-    settings.profileId || '0000000000000000',
-    ...Object.keys(settings.profileMappings || {}),
-    ...items
-      .map((item) => item.metadata.technical?.profileId)
-      .filter((id): id is string => Boolean(id) && id !== '0000000000000000'),
-  ])).filter(Boolean);
+  const availableProfileIds = useMemo(() => getAvailableProfileIds(settings, items), [items, settings]);
 
   const fetchDrives = async () => {
     setIsRefreshing(true);
     try {
       const res = await fetch('/api/system/drives');
-      if (!res.ok) throw new Error('Failed to load drives');
-      const data = await res.json();
+      const data = await readJsonOrThrow<DriveInfo[]>(res, 'Failed to load drives');
       setDrives(data);
     } catch (err) {
       console.error('Failed to fetch drives', err);
@@ -55,7 +62,7 @@ export const UsbExport = () => {
   }, [items, stagedIds]);
 
   const selectedDriveInfo = drives.find(d => d.id === selectedDrive);
-  const hasEnoughSpace = !selectedDriveInfo || !selectedDriveInfo.freeSpace || selectedDriveInfo.freeSpace > totalStagedSize;
+  const hasEnoughSpace = hasEnoughFreeSpace(selectedDriveInfo?.freeSpace ?? null, totalStagedSize);
 
   const handleExport = async () => {
     if (!selectedDrive || !hasEnoughSpace) return;
@@ -71,10 +78,7 @@ export const UsbExport = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemIds: stagedIds, usbPath: selectedDrive, targetProfileId: selectedProfileId })
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'USB export failed');
-      }
+      const data = await readJsonOrThrow<ExportSummary>(res, 'USB export failed');
 
       setSummary(data);
       if (data.success > 0) clearStaging();
@@ -141,7 +145,7 @@ export const UsbExport = () => {
                                 <div>
                                     <p className="font-bold">{drive.label}</p>
                                     <p className="text-xs text-gray-500">
-                                      {drive.id} • {drive.freeSpace ? `${formatSize(drive.freeSpace)} free` : 'Unknown free space'}
+                                      {drive.id} • {typeof drive.freeSpace === 'number' ? `${formatSize(drive.freeSpace)} free` : 'Unknown free space'}
                                     </p>
                                 </div>
                             </div>
@@ -167,9 +171,7 @@ export const UsbExport = () => {
                     >
                       {availableProfileIds.map((id) => (
                         <option key={id} value={id}>
-                          {id === '0000000000000000'
-                            ? 'Global / All Profiles'
-                            : `${settings.profileMappings?.[id] || 'Xbox Profile'} (${id})`}
+                          {getProfileLabel(id, settings.profileMappings)}
                         </option>
                       ))}
                     </select>
@@ -185,7 +187,7 @@ export const UsbExport = () => {
                     <div className="flex justify-between text-sm"><span className="text-gray-500">Items to Copy:</span><span className="font-bold">{stagedIds.length}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-gray-500">Total Size:</span><span className="font-bold">{formatSize(totalStagedSize)}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-gray-500">Destination:</span><span className="font-mono text-xbox-green truncate max-w-[150px]">{selectedDrive || 'Not Selected'}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Content Owner:</span><span className="font-mono text-white truncate max-w-[150px]">{selectedProfileId}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-500">Content Owner:</span><span className="font-mono text-white truncate max-w-[150px]">{getProfileLabel(selectedProfileId, settings.profileMappings)}</span></div>
                     
                     {!hasEnoughSpace && (
                       <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-500 text-xs">
